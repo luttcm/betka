@@ -6,17 +6,19 @@ import (
 )
 
 type Config struct {
-	Port               string
-	DatabaseURL        string
-	RedisURL           string
-	AuthJWTSecret      string
-	AuthTokenTTL       time.Duration
-	EmailFrom          string
-	EmailVerifyBaseURL string
-	SMTPHost           string
-	SMTPPort           string
-	SMTPUsername       string
-	SMTPPassword       string
+	Port                   string
+	DatabaseURL            string
+	RedisURL               string
+	AuthJWTSecret          string
+	AuthTokenTTL           time.Duration
+	EmailFrom              string
+	EmailVerifyBaseURL     string
+	SMTPHost               string
+	SMTPPort               string
+	SMTPUsername           string
+	SMTPPassword           string
+	BootstrapAdminEmail    string
+	BootstrapAdminPassword string
 }
 
 func Load() Config {
@@ -31,19 +33,23 @@ func Load() Config {
 	smtpPort := envOrDefault("SMTP_PORT", "")
 	smtpUsername := envOrDefault("SMTP_USERNAME", "")
 	smtpPassword := envOrDefault("SMTP_PASSWORD", "")
+	bootstrapAdminEmail := envOrDefault("BOOTSTRAP_ADMIN_EMAIL", "")
+	bootstrapAdminPassword := envOrDefault("BOOTSTRAP_ADMIN_PASSWORD", "")
 
 	return Config{
-		Port:               port,
-		DatabaseURL:        databaseURL,
-		RedisURL:           redisURL,
-		AuthJWTSecret:      authJWTSecret,
-		AuthTokenTTL:       authTokenTTL,
-		EmailFrom:          emailFrom,
-		EmailVerifyBaseURL: emailVerifyBaseURL,
-		SMTPHost:           smtpHost,
-		SMTPPort:           smtpPort,
-		SMTPUsername:       smtpUsername,
-		SMTPPassword:       smtpPassword,
+		Port:                   port,
+		DatabaseURL:            databaseURL,
+		RedisURL:               redisURL,
+		AuthJWTSecret:          authJWTSecret,
+		AuthTokenTTL:           authTokenTTL,
+		EmailFrom:              emailFrom,
+		EmailVerifyBaseURL:     emailVerifyBaseURL,
+		SMTPHost:               smtpHost,
+		SMTPPort:               smtpPort,
+		SMTPUsername:           smtpUsername,
+		SMTPPassword:           smtpPassword,
+		BootstrapAdminEmail:    bootstrapAdminEmail,
+		BootstrapAdminPassword: bootstrapAdminPassword,
 	}
 }
 

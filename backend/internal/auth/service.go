@@ -109,6 +109,38 @@ func (s *Service) VerifyEmail(token string) (User, error) {
 	return User{}, ErrInvalidVerifyToken
 }
 
+func (s *Service) BootstrapAdmin(email, password string) (User, error) {
+	normalizedEmail := strings.ToLower(strings.TrimSpace(email))
+	if normalizedEmail == "" || strings.TrimSpace(password) == "" {
+		return User{}, ErrInvalidCredentials
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if existing, exists := s.usersByEmail[normalizedEmail]; exists {
+		existing.PasswordHash = hashPassword(password)
+		existing.Role = "admin"
+		existing.EmailVerified = true
+		existing.VerifyToken = ""
+		return *existing, nil
+	}
+
+	u := &User{
+		ID:            "usr_" + randomToken(12),
+		Email:         normalizedEmail,
+		PasswordHash:  hashPassword(password),
+		Role:          "admin",
+		EmailVerified: true,
+		VerifyToken:   "",
+	}
+
+	s.usersByEmail[normalizedEmail] = u
+	s.usersByID[u.ID] = u
+
+	return *u, nil
+}
+
 func hashPassword(password string) string {
 	digest := sha256.Sum256([]byte(password))
 	return base64.RawURLEncoding.EncodeToString(digest[:])

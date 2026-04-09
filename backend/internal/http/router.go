@@ -1,6 +1,8 @@
 package http
 
 import (
+	"log"
+
 	"github.com/gin-gonic/gin"
 
 	"bet/backend/internal/auth"
@@ -18,6 +20,15 @@ func NewRouter(cfg config.Config) *gin.Engine {
 	router.Use(gin.Recovery(), gin.Logger())
 
 	authService := auth.NewService()
+	if cfg.BootstrapAdminEmail != "" && cfg.BootstrapAdminPassword != "" {
+		adminUser, err := authService.BootstrapAdmin(cfg.BootstrapAdminEmail, cfg.BootstrapAdminPassword)
+		if err != nil {
+			log.Printf("failed to bootstrap admin user: %v", err)
+		} else {
+			log.Printf("bootstrap admin ready: email=%s role=%s", adminUser.Email, adminUser.Role)
+		}
+	}
+
 	eventsService := events.NewService()
 	walletService := wallet.NewService(1000)
 	betsService := bets.NewService(eventsService, walletService)
