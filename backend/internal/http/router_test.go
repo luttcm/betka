@@ -8,7 +8,9 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
+	"bet/backend/internal/auth"
 	"bet/backend/internal/config"
 )
 
@@ -229,6 +231,103 @@ func TestModerationEndpointRequiresRole(t *testing.T) {
 
 	if moderationW.Code != http.StatusForbidden {
 		t.Fatalf("expected status %d for user role on moderation endpoint, got %d", http.StatusForbidden, moderationW.Code)
+	}
+}
+
+func TestEventModerationPublishFlow(t *testing.T) {
+	router := NewRouter(config.Config{AuthJWTSecret: "test-secret"})
+
+	creatorToken, err := auth.IssueToken("test-secret", time.Hour, "usr_creator", "user")
+	if err != nil {
+		t.Fatalf("failed to issue creator token: %v", err)
+	}
+
+	resolveAt := time.Now().UTC().Add(24 * time.Hour).Format(time.RFC3339)
+	createBody := map[string]string{
+		"title":       "Will company X close in 2026?",
+		"description": "Community event for moderation flow test",
+		"category":    "business",
+		"resolve_at":  resolveAt,
+	}
+	createRaw, _ := json.Marshal(createBody)
+
+	createReq := httptest.NewRequest(http.MethodPost, "/v1/events", bytes.NewBuffer(createRaw))
+	createReq.Header.Set("Content-Type", "application/json")
+	createReq.Header.Set("Authorization", "Bearer "+creatorToken)
+	createW := httptest.NewRecorder()
+	router.ServeHTTP(createW, createReq)
+
+	if createW.Code != http.StatusCreated {
+		t.Fatalf("expected status %d on event create, got %d", http.StatusCreated, createW.Code)
+	}
+
+	var created map[string]any
+	if err := json.Unmarshal(createW.Body.Bytes(), &created); err != nil {
+		t.Fatalf("failed to parse create event response: %v", err)
+	}
+
+	eventID, _ := created["id"].(string)
+	if eventID == "" {
+		t.Fatalf("expected event id in create response, got: %s", createW.Body.String())
+	}
+
+	listReq := httptest.NewRequest(http.MethodGet, "/v1/events", nil)
+	listW := httptest.NewRecorder()
+	router.ServeHTTP(listW, listReq)
+
+	if listW.Code != http.StatusOK {
+		t.Fatalf("expected status %d on events list before moderation, got %d", http.StatusOK, listW.Code)
+	}
+
+	if bytes.Contains(listW.Body.Bytes(), []byte(eventID)) {
+		t.Fatalf("event %q must not appear in public list before approval", eventID)
+	}
+
+	moderatorToken, err := auth.IssueToken("test-secret", time.Hour, "usr_mod", "moderator")
+	if err != nil {
+		t.Fatalf("failed to issue moderator token: %v", err)
+	}
+
+	moderationListReq := httptest.NewRequest(http.MethodGet, "/v1/moderation/events", nil)
+	moderationListReq.Header.Set("Authorization", "Bearer "+moderatorToken)
+	moderationListW := httptest.NewRecorder()
+	router.ServeHTTP(moderationListW, moderationListReq)
+
+	if moderationListW.Code != http.StatusOK {
+		t.Fatalf("expected status %d on moderation queue list, got %d", http.StatusOK, moderationListW.Code)
+	}
+
+	if !bytes.Contains(moderationListW.Body.Bytes(), []byte(eventID)) {
+		t.Fatalf("expected event %q in moderation queue, body=%s", eventID, moderationListW.Body.String())
+	}
+
+	approveReq := httptest.NewRequest(http.MethodPost, "/v1/moderation/events/"+eventID+"/approve", nil)
+	approveReq.Header.Set("Authorization", "Bearer "+moderatorToken)
+	approveW := httptest.NewRecorder()
+	router.ServeHTTP(approveW, approveReq)
+
+	if approveW.Code != http.StatusOK {
+		t.Fatalf("expected status %d on approve, got %d", http.StatusOK, approveW.Code)
+	}
+
+	getReq := httptest.NewRequest(http.MethodGet, "/v1/events/"+eventID, nil)
+	getW := httptest.NewRecorder()
+	router.ServeHTTP(getW, getReq)
+
+	if getW.Code != http.StatusOK {
+		t.Fatalf("expected status %d on get approved event, got %d", http.StatusOK, getW.Code)
+	}
+
+	listReq = httptest.NewRequest(http.MethodGet, "/v1/events", nil)
+	listW = httptest.NewRecorder()
+	router.ServeHTTP(listW, listReq)
+
+	if listW.Code != http.StatusOK {
+		t.Fatalf("expected status %d on events list after moderation, got %d", http.StatusOK, listW.Code)
+	}
+
+	if !bytes.Contains(listW.Body.Bytes(), []byte(eventID)) {
+		t.Fatalf("expected approved event %q in public list, body=%s", eventID, listW.Body.String())
 	}
 }
 
