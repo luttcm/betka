@@ -9,7 +9,7 @@ import (
 
 func main() {
 	cfg := config.Load()
-	router := http.NewRouter()
+	router := http.NewRouter(cfg)
 
 	log.Printf("API started on port %s", cfg.Port)
 	if err := router.Run(":" + cfg.Port); err != nil {
