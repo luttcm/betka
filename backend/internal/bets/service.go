@@ -16,6 +16,7 @@ var (
 	ErrInvalidBetInput       = errors.New("invalid bet input")
 	ErrMissingIdempotencyKey = errors.New("missing idempotency key")
 	ErrEventUnavailable      = errors.New("event unavailable for betting")
+	ErrInvalidSettlement     = errors.New("invalid settlement")
 )
 
 type Bet struct {
@@ -135,4 +136,42 @@ func (s *Service) ListMyBets(userID string) ([]Bet, error) {
 	})
 
 	return items, nil
+}
+
+func (s *Service) SettleEventBets(eventID, winnerOutcome string) ([]Bet, error) {
+	eventID = strings.TrimSpace(eventID)
+	winnerOutcome = strings.ToLower(strings.TrimSpace(winnerOutcome))
+
+	if eventID == "" || (winnerOutcome != "yes" && winnerOutcome != "no") {
+		return nil, ErrInvalidSettlement
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	updated := make([]Bet, 0)
+	for _, b := range s.betsByID {
+		if b.EventID != eventID || b.Status != "open" {
+			continue
+		}
+
+		if b.OutcomeCode == winnerOutcome {
+			b.Status = "won"
+			if _, err := s.walletService.SettlePayout(b.UserID, b.PotentialPayout, "bet_settlement", b.ID); err != nil {
+				return nil, err
+			}
+		} else {
+			b.Status = "lost"
+		}
+
+		now := time.Now().UTC()
+		b.SettledAt = &now
+		updated = append(updated, *b)
+	}
+
+	sort.Slice(updated, func(i, j int) bool {
+		return updated[i].PlacedAt.Before(updated[j].PlacedAt)
+	})
+
+	return updated, nil
 }
