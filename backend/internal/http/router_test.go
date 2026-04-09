@@ -331,6 +331,140 @@ func TestEventModerationPublishFlow(t *testing.T) {
 	}
 }
 
+func TestBetsFlowWithWalletHoldAndIdempotency(t *testing.T) {
+	router := NewRouter(config.Config{AuthJWTSecret: "test-secret"})
+
+	creatorToken, err := auth.IssueToken("test-secret", time.Hour, "usr_creator_bets", "user")
+	if err != nil {
+		t.Fatalf("failed to issue creator token: %v", err)
+	}
+
+	moderatorToken, err := auth.IssueToken("test-secret", time.Hour, "usr_mod_bets", "moderator")
+	if err != nil {
+		t.Fatalf("failed to issue moderator token: %v", err)
+	}
+
+	bettorToken, err := auth.IssueToken("test-secret", time.Hour, "usr_bettor", "user")
+	if err != nil {
+		t.Fatalf("failed to issue bettor token: %v", err)
+	}
+
+	eventID := createApprovedEvent(t, router, creatorToken, moderatorToken)
+
+	walletReq := httptest.NewRequest(http.MethodGet, "/v1/wallet", nil)
+	walletReq.Header.Set("Authorization", "Bearer "+bettorToken)
+	walletW := httptest.NewRecorder()
+	router.ServeHTTP(walletW, walletReq)
+
+	if walletW.Code != http.StatusOK {
+		t.Fatalf("expected status %d on wallet get, got %d", http.StatusOK, walletW.Code)
+	}
+
+	if !bytes.Contains(walletW.Body.Bytes(), []byte("1000")) {
+		t.Fatalf("expected initial wallet balance in response, body=%s", walletW.Body.String())
+	}
+
+	betBody := map[string]any{
+		"event_id":     eventID,
+		"outcome_code": "yes",
+		"stake":        100.0,
+	}
+	betRaw, _ := json.Marshal(betBody)
+
+	placeReq := httptest.NewRequest(http.MethodPost, "/v1/bets", bytes.NewBuffer(betRaw))
+	placeReq.Header.Set("Content-Type", "application/json")
+	placeReq.Header.Set("Authorization", "Bearer "+bettorToken)
+	placeReq.Header.Set("Idempotency-Key", "idem-bet-1")
+	placeW := httptest.NewRecorder()
+	router.ServeHTTP(placeW, placeReq)
+
+	if placeW.Code != http.StatusCreated {
+		t.Fatalf("expected status %d on first place bet, got %d, body=%s", http.StatusCreated, placeW.Code, placeW.Body.String())
+	}
+
+	var createdBet map[string]any
+	if err := json.Unmarshal(placeW.Body.Bytes(), &createdBet); err != nil {
+		t.Fatalf("failed to parse created bet response: %v", err)
+	}
+
+	betID, _ := createdBet["id"].(string)
+	if betID == "" {
+		t.Fatalf("expected created bet id, body=%s", placeW.Body.String())
+	}
+
+	repeatReq := httptest.NewRequest(http.MethodPost, "/v1/bets", bytes.NewBuffer(betRaw))
+	repeatReq.Header.Set("Content-Type", "application/json")
+	repeatReq.Header.Set("Authorization", "Bearer "+bettorToken)
+	repeatReq.Header.Set("Idempotency-Key", "idem-bet-1")
+	repeatW := httptest.NewRecorder()
+	router.ServeHTTP(repeatW, repeatReq)
+
+	if repeatW.Code != http.StatusOK {
+		t.Fatalf("expected status %d on idempotent retry, got %d, body=%s", http.StatusOK, repeatW.Code, repeatW.Body.String())
+	}
+
+	if !bytes.Contains(repeatW.Body.Bytes(), []byte(betID)) {
+		t.Fatalf("expected same bet id %q on idempotent retry, body=%s", betID, repeatW.Body.String())
+	}
+
+	walletReq = httptest.NewRequest(http.MethodGet, "/v1/wallet", nil)
+	walletReq.Header.Set("Authorization", "Bearer "+bettorToken)
+	walletW = httptest.NewRecorder()
+	router.ServeHTTP(walletW, walletReq)
+
+	if walletW.Code != http.StatusOK {
+		t.Fatalf("expected status %d on wallet get after hold, got %d", http.StatusOK, walletW.Code)
+	}
+
+	if !bytes.Contains(walletW.Body.Bytes(), []byte("900")) {
+		t.Fatalf("expected wallet balance reduced after hold, body=%s", walletW.Body.String())
+	}
+
+	myBetsReq := httptest.NewRequest(http.MethodGet, "/v1/bets/my", nil)
+	myBetsReq.Header.Set("Authorization", "Bearer "+bettorToken)
+	myBetsW := httptest.NewRecorder()
+	router.ServeHTTP(myBetsW, myBetsReq)
+
+	if myBetsW.Code != http.StatusOK {
+		t.Fatalf("expected status %d on my bets list, got %d", http.StatusOK, myBetsW.Code)
+	}
+
+	if !bytes.Contains(myBetsW.Body.Bytes(), []byte(betID)) {
+		t.Fatalf("expected bet id %q in my bets, body=%s", betID, myBetsW.Body.String())
+	}
+
+	txReq := httptest.NewRequest(http.MethodGet, "/v1/wallet/transactions", nil)
+	txReq.Header.Set("Authorization", "Bearer "+bettorToken)
+	txW := httptest.NewRecorder()
+	router.ServeHTTP(txW, txReq)
+
+	if txW.Code != http.StatusOK {
+		t.Fatalf("expected status %d on transactions list, got %d", http.StatusOK, txW.Code)
+	}
+
+	if !bytes.Contains(txW.Body.Bytes(), []byte("\"type\":\"hold\"")) {
+		t.Fatalf("expected hold transaction in wallet transactions, body=%s", txW.Body.String())
+	}
+
+	insufficientBody := map[string]any{
+		"event_id":     eventID,
+		"outcome_code": "no",
+		"stake":        2000.0,
+	}
+	insufficientRaw, _ := json.Marshal(insufficientBody)
+
+	insufficientReq := httptest.NewRequest(http.MethodPost, "/v1/bets", bytes.NewBuffer(insufficientRaw))
+	insufficientReq.Header.Set("Content-Type", "application/json")
+	insufficientReq.Header.Set("Authorization", "Bearer "+bettorToken)
+	insufficientReq.Header.Set("Idempotency-Key", "idem-bet-2")
+	insufficientW := httptest.NewRecorder()
+	router.ServeHTTP(insufficientW, insufficientReq)
+
+	if insufficientW.Code != http.StatusConflict {
+		t.Fatalf("expected status %d on insufficient funds, got %d, body=%s", http.StatusConflict, insufficientW.Code, insufficientW.Body.String())
+	}
+}
+
 func extractVerifyTokenFromRegisterEmailLog(body string) string {
 	const marker = "token="
 	idx := bytes.Index([]byte(body), []byte(marker))
@@ -369,4 +503,48 @@ func captureLogs(t *testing.T) *bytes.Buffer {
 	})
 
 	return buf
+}
+
+func createApprovedEvent(t *testing.T, router http.Handler, creatorToken, moderatorToken string) string {
+	t.Helper()
+
+	resolveAt := time.Now().UTC().Add(24 * time.Hour).Format(time.RFC3339)
+	createBody := map[string]string{
+		"title":       "Will product hit 10k users?",
+		"description": "Event for bets flow test",
+		"category":    "product",
+		"resolve_at":  resolveAt,
+	}
+	createRaw, _ := json.Marshal(createBody)
+
+	createReq := httptest.NewRequest(http.MethodPost, "/v1/events", bytes.NewBuffer(createRaw))
+	createReq.Header.Set("Content-Type", "application/json")
+	createReq.Header.Set("Authorization", "Bearer "+creatorToken)
+	createW := httptest.NewRecorder()
+	router.ServeHTTP(createW, createReq)
+
+	if createW.Code != http.StatusCreated {
+		t.Fatalf("expected status %d on event create, got %d, body=%s", http.StatusCreated, createW.Code, createW.Body.String())
+	}
+
+	var created map[string]any
+	if err := json.Unmarshal(createW.Body.Bytes(), &created); err != nil {
+		t.Fatalf("failed to parse create event response: %v", err)
+	}
+
+	eventID, _ := created["id"].(string)
+	if eventID == "" {
+		t.Fatalf("expected event id in create response, got: %s", createW.Body.String())
+	}
+
+	approveReq := httptest.NewRequest(http.MethodPost, "/v1/moderation/events/"+eventID+"/approve", nil)
+	approveReq.Header.Set("Authorization", "Bearer "+moderatorToken)
+	approveW := httptest.NewRecorder()
+	router.ServeHTTP(approveW, approveReq)
+
+	if approveW.Code != http.StatusOK {
+		t.Fatalf("expected status %d on approve, got %d, body=%s", http.StatusOK, approveW.Code, approveW.Body.String())
+	}
+
+	return eventID
 }

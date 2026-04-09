@@ -4,11 +4,13 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"bet/backend/internal/auth"
+	"bet/backend/internal/bets"
 	"bet/backend/internal/config"
 	"bet/backend/internal/events"
 	"bet/backend/internal/http/handlers"
 	"bet/backend/internal/http/middleware"
 	"bet/backend/internal/notifications"
+	"bet/backend/internal/wallet"
 )
 
 func NewRouter(cfg config.Config) *gin.Engine {
@@ -17,6 +19,8 @@ func NewRouter(cfg config.Config) *gin.Engine {
 
 	authService := auth.NewService()
 	eventsService := events.NewService()
+	walletService := wallet.NewService(1000)
+	betsService := bets.NewService(eventsService, walletService)
 	emailSender := notifications.NewSenderFromConfig(cfg)
 	authHandler := handlers.NewAuthHandler(
 		authService,
@@ -26,6 +30,8 @@ func NewRouter(cfg config.Config) *gin.Engine {
 		cfg.EmailVerifyBaseURL,
 	)
 	eventsHandler := handlers.NewEventsHandler(eventsService)
+	walletHandler := handlers.NewWalletHandler(walletService)
+	betsHandler := handlers.NewBetsHandler(betsService)
 
 	router.GET("/health", handlers.Health)
 
@@ -44,6 +50,20 @@ func NewRouter(cfg config.Config) *gin.Engine {
 		meGroup.Use(middleware.RequireAuth(cfg.AuthJWTSecret))
 		{
 			meGroup.GET("", authHandler.Me)
+		}
+
+		walletGroup := v1.Group("/wallet")
+		walletGroup.Use(middleware.RequireAuth(cfg.AuthJWTSecret))
+		{
+			walletGroup.GET("", walletHandler.GetWallet)
+			walletGroup.GET("/transactions", walletHandler.ListTransactions)
+		}
+
+		betsGroup := v1.Group("/bets")
+		betsGroup.Use(middleware.RequireAuth(cfg.AuthJWTSecret))
+		{
+			betsGroup.POST("", betsHandler.PlaceBet)
+			betsGroup.GET("/my", betsHandler.ListMyBets)
 		}
 
 		eventsGroup := v1.Group("/events")
