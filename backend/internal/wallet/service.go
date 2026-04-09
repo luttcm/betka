@@ -101,11 +101,36 @@ func (s *Service) Hold(userID string, amount float64, refType, refID string) (Tr
 	w.BalanceTokens -= amount
 	w.UpdatedAt = time.Now().UTC()
 
+	tx := s.appendTransactionLocked(userID, "hold", amount, refType, refID)
+	return tx, nil
+}
+
+func (s *Service) SettlePayout(userID string, amount float64, refType, refID string) (Transaction, error) {
+	userID = strings.TrimSpace(userID)
+	refType = strings.TrimSpace(refType)
+	refID = strings.TrimSpace(refID)
+
+	if userID == "" || amount <= 0 {
+		return Transaction{}, ErrInvalidWalletInput
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	w := s.ensureWalletLocked(userID)
+	w.BalanceTokens += amount
+	w.UpdatedAt = time.Now().UTC()
+
+	tx := s.appendTransactionLocked(userID, "settle", amount, refType, refID)
+	return tx, nil
+}
+
+func (s *Service) appendTransactionLocked(userID, txType string, amount float64, refType, refID string) Transaction {
 	s.transactionSeq++
 	tx := Transaction{
 		ID:           fmt.Sprintf("wtx_%d", s.transactionSeq),
 		UserID:       userID,
-		Type:         "hold",
+		Type:         txType,
 		AmountTokens: amount,
 		RefType:      refType,
 		RefID:        refID,
@@ -113,8 +138,7 @@ func (s *Service) Hold(userID string, amount float64, refType, refID string) (Tr
 	}
 
 	s.txByUser[userID] = append(s.txByUser[userID], tx)
-
-	return tx, nil
+	return tx
 }
 
 func (s *Service) ensureWalletLocked(userID string) *Wallet {

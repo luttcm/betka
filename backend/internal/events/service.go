@@ -14,6 +14,8 @@ var (
 	ErrEventNotFound            = errors.New("event not found")
 	ErrModerationAlreadyHandled = errors.New("moderation task already handled")
 	ErrInvalidModerationReason  = errors.New("invalid moderation reason")
+	ErrInvalidSettlementInput   = errors.New("invalid settlement input")
+	ErrEventNotSettlable        = errors.New("event is not settlable")
 )
 
 type Event struct {
@@ -24,6 +26,7 @@ type Event struct {
 	Category      string    `json:"category"`
 	ResolveAt     time.Time `json:"resolve_at"`
 	Status        string    `json:"status"`
+	WinnerOutcome string    `json:"winner_outcome,omitempty"`
 	CreatedAt     time.Time `json:"created_at"`
 }
 
@@ -192,6 +195,32 @@ func (s *Service) review(eventID, moderatorID, reason, targetStatus string) (Eve
 	t.Reason = strings.TrimSpace(reason)
 	t.ReviewedAt = &now
 	e.Status = targetStatus
+
+	return *e, nil
+}
+
+func (s *Service) SettleEvent(eventID, winnerOutcome string) (Event, error) {
+	eventID = strings.TrimSpace(eventID)
+	winnerOutcome = strings.ToLower(strings.TrimSpace(winnerOutcome))
+
+	if winnerOutcome != "yes" && winnerOutcome != "no" {
+		return Event{}, ErrInvalidSettlementInput
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	e, ok := s.eventsByID[eventID]
+	if !ok {
+		return Event{}, ErrEventNotFound
+	}
+
+	if e.Status != "approved" {
+		return Event{}, ErrEventNotSettlable
+	}
+
+	e.Status = "settled"
+	e.WinnerOutcome = winnerOutcome
 
 	return *e, nil
 }

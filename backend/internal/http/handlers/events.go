@@ -8,16 +8,18 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"bet/backend/internal/bets"
 	"bet/backend/internal/events"
 	"bet/backend/internal/http/middleware"
 )
 
 type EventsHandler struct {
-	service *events.Service
+	service     *events.Service
+	betsService *bets.Service
 }
 
-func NewEventsHandler(service *events.Service) *EventsHandler {
-	return &EventsHandler{service: service}
+func NewEventsHandler(service *events.Service, betsService *bets.Service) *EventsHandler {
+	return &EventsHandler{service: service, betsService: betsService}
 }
 
 type createEventRequest struct {
@@ -134,4 +136,47 @@ func (h *EventsHandler) RejectEvent(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, e)
+}
+
+type settleEventRequest struct {
+	WinnerOutcome string `json:"winner_outcome"`
+}
+
+func (h *EventsHandler) SettleEvent(c *gin.Context) {
+	var req settleEventRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	e, err := h.service.SettleEvent(c.Param("id"), req.WinnerOutcome)
+	if err != nil {
+		switch {
+		case errors.Is(err, events.ErrEventNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": "event not found"})
+		case errors.Is(err, events.ErrInvalidSettlementInput):
+			c.JSON(http.StatusBadRequest, gin.H{"error": "winner_outcome must be yes or no"})
+		case errors.Is(err, events.ErrEventNotSettlable):
+			c.JSON(http.StatusConflict, gin.H{"error": "event is not settlable"})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to settle event"})
+		}
+		return
+	}
+
+	settledBets, err := h.betsService.SettleEventBets(e.ID, e.WinnerOutcome)
+	if err != nil {
+		if errors.Is(err, bets.ErrInvalidSettlement) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid settlement"})
+			return
+		}
+
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to settle bets"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"event":        e,
+		"settled_bets": settledBets,
+	})
 }

@@ -465,6 +465,97 @@ func TestBetsFlowWithWalletHoldAndIdempotency(t *testing.T) {
 	}
 }
 
+func TestAdminSettlementFlow(t *testing.T) {
+	router := NewRouter(config.Config{AuthJWTSecret: "test-secret"})
+
+	creatorToken, err := auth.IssueToken("test-secret", time.Hour, "usr_creator_settle", "user")
+	if err != nil {
+		t.Fatalf("failed to issue creator token: %v", err)
+	}
+
+	moderatorToken, err := auth.IssueToken("test-secret", time.Hour, "usr_mod_settle", "moderator")
+	if err != nil {
+		t.Fatalf("failed to issue moderator token: %v", err)
+	}
+
+	adminToken, err := auth.IssueToken("test-secret", time.Hour, "usr_admin_settle", "admin")
+	if err != nil {
+		t.Fatalf("failed to issue admin token: %v", err)
+	}
+
+	bettorToken, err := auth.IssueToken("test-secret", time.Hour, "usr_bettor_settle", "user")
+	if err != nil {
+		t.Fatalf("failed to issue bettor token: %v", err)
+	}
+
+	eventID := createApprovedEvent(t, router, creatorToken, moderatorToken)
+
+	betBody := map[string]any{
+		"event_id":     eventID,
+		"outcome_code": "yes",
+		"stake":        100.0,
+	}
+	betRaw, _ := json.Marshal(betBody)
+
+	placeReq := httptest.NewRequest(http.MethodPost, "/v1/bets", bytes.NewBuffer(betRaw))
+	placeReq.Header.Set("Content-Type", "application/json")
+	placeReq.Header.Set("Authorization", "Bearer "+bettorToken)
+	placeReq.Header.Set("Idempotency-Key", "idem-settle-1")
+	placeW := httptest.NewRecorder()
+	router.ServeHTTP(placeW, placeReq)
+
+	if placeW.Code != http.StatusCreated {
+		t.Fatalf("expected status %d on place bet, got %d, body=%s", http.StatusCreated, placeW.Code, placeW.Body.String())
+	}
+
+	settleBody := map[string]string{"winner_outcome": "yes"}
+	settleRaw, _ := json.Marshal(settleBody)
+
+	settleReq := httptest.NewRequest(http.MethodPost, "/v1/admin/events/"+eventID+"/settle", bytes.NewBuffer(settleRaw))
+	settleReq.Header.Set("Content-Type", "application/json")
+	settleReq.Header.Set("Authorization", "Bearer "+adminToken)
+	settleW := httptest.NewRecorder()
+	router.ServeHTTP(settleW, settleReq)
+
+	if settleW.Code != http.StatusOK {
+		t.Fatalf("expected status %d on settlement, got %d, body=%s", http.StatusOK, settleW.Code, settleW.Body.String())
+	}
+
+	if !bytes.Contains(settleW.Body.Bytes(), []byte("\"status\":\"settled\"")) {
+		t.Fatalf("expected settled event in response, body=%s", settleW.Body.String())
+	}
+
+	if !bytes.Contains(settleW.Body.Bytes(), []byte("\"status\":\"won\"")) {
+		t.Fatalf("expected won bet status in settlement response, body=%s", settleW.Body.String())
+	}
+
+	walletReq := httptest.NewRequest(http.MethodGet, "/v1/wallet", nil)
+	walletReq.Header.Set("Authorization", "Bearer "+bettorToken)
+	walletW := httptest.NewRecorder()
+	router.ServeHTTP(walletW, walletReq)
+
+	if walletW.Code != http.StatusOK {
+		t.Fatalf("expected status %d on wallet get after settlement, got %d", http.StatusOK, walletW.Code)
+	}
+
+	if !bytes.Contains(walletW.Body.Bytes(), []byte("1100")) {
+		t.Fatalf("expected wallet payout after settlement, body=%s", walletW.Body.String())
+	}
+
+	txReq := httptest.NewRequest(http.MethodGet, "/v1/wallet/transactions", nil)
+	txReq.Header.Set("Authorization", "Bearer "+bettorToken)
+	txW := httptest.NewRecorder()
+	router.ServeHTTP(txW, txReq)
+
+	if txW.Code != http.StatusOK {
+		t.Fatalf("expected status %d on transactions list after settlement, got %d", http.StatusOK, txW.Code)
+	}
+
+	if !bytes.Contains(txW.Body.Bytes(), []byte("\"type\":\"settle\"")) {
+		t.Fatalf("expected settle transaction in wallet transactions, body=%s", txW.Body.String())
+	}
+}
+
 func extractVerifyTokenFromRegisterEmailLog(body string) string {
 	const marker = "token="
 	idx := bytes.Index([]byte(body), []byte(marker))

@@ -29,7 +29,7 @@ func NewRouter(cfg config.Config) *gin.Engine {
 		cfg.AuthTokenTTL,
 		cfg.EmailVerifyBaseURL,
 	)
-	eventsHandler := handlers.NewEventsHandler(eventsService)
+	eventsHandler := handlers.NewEventsHandler(eventsService, betsService)
 	walletHandler := handlers.NewWalletHandler(walletService)
 	betsHandler := handlers.NewBetsHandler(betsService)
 
@@ -85,6 +85,12 @@ func NewRouter(cfg config.Config) *gin.Engine {
 			moderationGroup.GET("/events", eventsHandler.ListModerationEvents)
 			moderationGroup.POST("/events/:id/approve", eventsHandler.ApproveEvent)
 			moderationGroup.POST("/events/:id/reject", eventsHandler.RejectEvent)
+		}
+
+		adminGroup := v1.Group("/admin")
+		adminGroup.Use(middleware.RequireRoles(cfg.AuthJWTSecret, "admin"))
+		{
+			adminGroup.POST("/events/:id/settle", eventsHandler.SettleEvent)
 		}
 	}
 
