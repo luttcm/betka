@@ -2,26 +2,53 @@
 
 import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useState } from "react";
 
+import { UserRole } from "@/lib/types";
+
 const AUTH_STORAGE_KEY = "bet_mvp_auth";
 
 interface StoredAuth {
   token: string;
   email?: string;
+  role?: UserRole;
 }
 
 interface AuthContextValue {
   token: string | null;
   email: string | null;
+  role: UserRole | null;
+  canModerate: boolean;
   isAuthenticated: boolean;
-  signIn: (token: string, email?: string) => void;
+  signIn: (token: string, email?: string, role?: UserRole) => void;
   signOut: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+function roleFromToken(token: string): UserRole | null {
+  try {
+    const [, payload] = token.split(".");
+    if (!payload) {
+      return null;
+    }
+
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const withPadding = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
+    const decoded = JSON.parse(atob(withPadding)) as { role?: unknown };
+
+    if (decoded.role === "user" || decoded.role === "moderator" || decoded.role === "admin") {
+      return decoded.role;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
 export function AuthProvider({ children }: PropsWithChildren) {
   const [token, setToken] = useState<string | null>(null);
   const [email, setEmail] = useState<string | null>(null);
+  const [role, setRole] = useState<UserRole | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -38,6 +65,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       if (parsed?.token) {
         setToken(parsed.token);
         setEmail(parsed.email ?? null);
+        setRole(parsed.role ?? roleFromToken(parsed.token));
       }
     } catch {
       window.localStorage.removeItem(AUTH_STORAGE_KEY);
@@ -48,16 +76,22 @@ export function AuthProvider({ children }: PropsWithChildren) {
     () => ({
       token,
       email,
+      role,
+      canModerate: role === "admin" || role === "moderator",
       isAuthenticated: Boolean(token),
-      signIn: (nextToken: string, nextEmail?: string) => {
+      signIn: (nextToken: string, nextEmail?: string, nextRole?: UserRole) => {
         const normalizedEmail = nextEmail?.trim() || null;
+        const resolvedRole = nextRole ?? roleFromToken(nextToken);
+
         setToken(nextToken);
         setEmail(normalizedEmail);
+        setRole(resolvedRole);
 
         if (typeof window !== "undefined") {
           const payload: StoredAuth = {
             token: nextToken,
             email: normalizedEmail ?? undefined,
+            role: resolvedRole ?? undefined,
           };
           window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(payload));
         }
@@ -65,13 +99,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
       signOut: () => {
         setToken(null);
         setEmail(null);
+        setRole(null);
 
         if (typeof window !== "undefined") {
           window.localStorage.removeItem(AUTH_STORAGE_KEY);
         }
       },
     }),
-    [email, token],
+    [email, role, token],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -85,4 +120,3 @@ export function useAuth() {
 
   return context;
 }
-

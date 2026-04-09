@@ -42,15 +42,15 @@ export function AuthLoginForm() {
   });
 
   return (
-    <form onSubmit={onSubmit} className="space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+    <form onSubmit={onSubmit} className="panel space-y-4">
       <div className="grid gap-1">
-        <label htmlFor="email" className="text-sm font-medium">
+        <label htmlFor="email" className="field-label">
           Email
         </label>
         <input
           id="email"
           type="email"
-          className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+          className="text-input"
           placeholder="user@example.com"
           {...register("email")}
         />
@@ -58,13 +58,13 @@ export function AuthLoginForm() {
       </div>
 
       <div className="grid gap-1">
-        <label htmlFor="password" className="text-sm font-medium">
+        <label htmlFor="password" className="field-label">
           Пароль
         </label>
         <input
           id="password"
           type="password"
-          className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+          className="text-input"
           {...register("password")}
         />
         {errors.password && <p className="text-sm text-red-600">{errors.password.message}</p>}
@@ -85,11 +85,10 @@ export function AuthLoginForm() {
       <button
         type="submit"
         disabled={mutation.isPending}
-        className="inline-flex items-center rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+        className="btn-primary"
       >
         {mutation.isPending ? "Входим..." : "Войти"}
       </button>
     </form>
   );
 }
-

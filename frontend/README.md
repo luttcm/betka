@@ -15,6 +15,9 @@ Frontend-часть MVP на Next.js + TypeScript.
 - Каталог событий: `GET /v1/events`
 - Карточка события: `GET /v1/events/:id`
 - Создание события: `POST /v1/events`
+- Очередь модерации: `GET /v1/moderation/events`
+- Одобрение события модератором/админом: `POST /v1/moderation/events/:id/approve`
+- Отклонение события модератором/админом: `POST /v1/moderation/events/:id/reject`
 - Регистрация: `POST /v1/auth/register`
 - Вход: `POST /v1/auth/login`
 - Подтверждение email: `GET /v1/auth/verify-email?token=...`
@@ -24,9 +27,15 @@ Frontend-часть MVP на Next.js + TypeScript.
 - `/` — каталог
 - `/events/[id]` — карточка события
 - `/events/new` — создание события
+- `/moderation` — вкладка модерации (approve/reject)
 - `/auth/register` — регистрация
 - `/auth/login` — вход
 - `/auth/verify` — подтверждение email по токену
+
+## Дизайн-система (текущая реализация)
+
+- Визуальная база приведена к стилистике из [`DESIGN.md`](../DESIGN.md): акцентный синий `#0052ff`, тёмные hero-блоки и pill-кнопки.
+- Общие UI-классы вынесены в [`globals.css`](src/app/globals.css): `btn-primary`, `btn-secondary`, `btn-danger`, `panel`, `panel-dark`, `text-input`.
 
 ## Локальный запуск
 

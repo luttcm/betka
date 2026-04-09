@@ -34,15 +34,15 @@ export function AuthVerifyForm() {
   });
 
   return (
-    <form onSubmit={onSubmit} className="space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+    <form onSubmit={onSubmit} className="panel space-y-4">
       <div className="grid gap-1">
-        <label htmlFor="token" className="text-sm font-medium">
+        <label htmlFor="token" className="field-label">
           Токен подтверждения email
         </label>
         <input
           id="token"
           type="text"
-          className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+          className="text-input"
           placeholder="Токен из ссылки verify-email"
           {...register("token")}
         />
@@ -64,11 +64,10 @@ export function AuthVerifyForm() {
       <button
         type="submit"
         disabled={mutation.isPending}
-        className="inline-flex items-center rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+        className="btn-primary"
       >
         {mutation.isPending ? "Проверяем..." : "Подтвердить email"}
       </button>
     </form>
   );
 }
-

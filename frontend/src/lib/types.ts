@@ -1,4 +1,5 @@
 export type EventStatus = "pending" | "approved" | "rejected" | "settled";
+export type UserRole = "user" | "moderator" | "admin";
 
 export interface EventItem {
   id: string;
@@ -14,6 +15,23 @@ export interface EventItem {
 
 export interface EventListResponse {
   items: EventItem[];
+}
+
+export interface ModerationQueueItem {
+  task: {
+    id: string;
+    event_id: string;
+    status: string;
+    moderator_id?: string;
+    reason?: string;
+    created_at: string;
+    reviewed_at?: string;
+  };
+  event: EventItem;
+}
+
+export interface ModerationEventsResponse {
+  items: ModerationQueueItem[];
 }
 
 export interface CreateEventPayload {

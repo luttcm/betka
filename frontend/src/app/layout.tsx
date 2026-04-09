@@ -20,17 +20,24 @@ export default function RootLayout({
     <html lang="ru">
       <body>
         <Providers>
-          <main className="mx-auto min-h-screen w-full max-w-5xl px-4 py-8">
-            <header className="mb-8 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="flex flex-wrap items-center justify-between gap-3">
+          <main className="app-shell">
+            <header className="mb-8 rounded-[32px] bg-[var(--near-black)] p-6 text-white md:p-8">
+              <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
-                  <p className="text-sm text-slate-500">Bet MVP</p>
-                  <h1 className="text-xl font-semibold">Пользовательские события</h1>
+                  <p className="text-sm text-white/70">Bet MVP</p>
+                  <h1 className="text-3xl font-medium leading-tight md:text-4xl">Пользовательские события</h1>
                 </div>
-                <div className="flex items-center gap-6 text-sm">
-                  <nav className="flex items-center gap-4 text-sm">
-                    <Link href="/">Каталог</Link>
-                    <Link href="/events/new">Создать событие</Link>
+                <div className="flex flex-col items-start gap-3 text-sm md:items-end">
+                  <nav className="flex flex-wrap items-center gap-2">
+                    <Link href="/" className="btn-secondary !rounded-full !px-4 !py-2 !text-xs">
+                      Каталог
+                    </Link>
+                    <Link href="/events/new" className="btn-secondary !rounded-full !px-4 !py-2 !text-xs">
+                      Создать событие
+                    </Link>
+                    <Link href="/moderation" className="btn-secondary !rounded-full !px-4 !py-2 !text-xs">
+                      Модерация
+                    </Link>
                   </nav>
                   <AuthNav />
                 </div>
