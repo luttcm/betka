@@ -25,6 +25,12 @@
 - `GET /v1/auth/verify-email?token=...`
 - `GET /v1/me` (требуется `Authorization: Bearer <token>`)
 
+Ограничения потока аутентификации:
+
+- После регистрации пользователь получает письмо с ссылкой подтверждения email.
+- До подтверждения email endpoint `POST /v1/auth/login` возвращает `403 Forbidden` с ошибкой `email is not verified`.
+- После успешного подтверждения (`GET /v1/auth/verify-email?token=...`) логин возвращает JWT access token.
+
 Пример `POST /v1/auth/register` request:
 
 ```json

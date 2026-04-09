@@ -3,8 +3,10 @@ package http
 import (
 	"bytes"
 	"encoding/json"
+	"log"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	"bet/backend/internal/config"
@@ -25,6 +27,12 @@ type registerResponse struct {
 type loginResponse struct {
 	AccessToken string `json:"access_token"`
 	TokenType   string `json:"token_type"`
+}
+
+type verifyEmailResponse struct {
+	ID            string `json:"id"`
+	Email         string `json:"email"`
+	EmailVerified bool   `json:"email_verified"`
 }
 
 func TestHealthEndpoint(t *testing.T) {
@@ -54,7 +62,12 @@ func TestHealthEndpoint(t *testing.T) {
 }
 
 func TestAuthRegisterLoginAndMe(t *testing.T) {
-	router := NewRouter(config.Config{AuthJWTSecret: "test-secret"})
+	logBuf := captureLogs(t)
+
+	router := NewRouter(config.Config{
+		AuthJWTSecret:      "test-secret",
+		EmailVerifyBaseURL: "http://localhost:3000/v1/auth/verify-email",
+	})
 
 	registerBody := map[string]string{
 		"email":    "user@example.com",
@@ -91,8 +104,47 @@ func TestAuthRegisterLoginAndMe(t *testing.T) {
 	loginW := httptest.NewRecorder()
 	router.ServeHTTP(loginW, loginReq)
 
+	if loginW.Code != http.StatusForbidden {
+		t.Fatalf("expected status %d on login before verify, got %d", http.StatusForbidden, loginW.Code)
+	}
+
+	verifyReq := httptest.NewRequest(http.MethodGet, "/v1/auth/verify-email?token=", nil)
+	verifyW := httptest.NewRecorder()
+	router.ServeHTTP(verifyW, verifyReq)
+
+	if verifyW.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d on verify with empty token, got %d", http.StatusBadRequest, verifyW.Code)
+	}
+
+	verifyToken := extractVerifyTokenFromRegisterEmailLog(logBuf.String())
+	if verifyToken == "" {
+		t.Fatal("expected verify token to be present in register email log")
+	}
+
+	verifyReq = httptest.NewRequest(http.MethodGet, "/v1/auth/verify-email?token="+verifyToken, nil)
+	verifyW = httptest.NewRecorder()
+	router.ServeHTTP(verifyW, verifyReq)
+
+	if verifyW.Code != http.StatusOK {
+		t.Fatalf("expected status %d on verify, got %d", http.StatusOK, verifyW.Code)
+	}
+
+	var verifyRes verifyEmailResponse
+	if err := json.Unmarshal(verifyW.Body.Bytes(), &verifyRes); err != nil {
+		t.Fatalf("failed to parse verify response: %v", err)
+	}
+
+	if !verifyRes.EmailVerified {
+		t.Fatalf("expected email to be verified, got %+v", verifyRes)
+	}
+
+	loginReq = httptest.NewRequest(http.MethodPost, "/v1/auth/login", bytes.NewBuffer(loginRaw))
+	loginReq.Header.Set("Content-Type", "application/json")
+	loginW = httptest.NewRecorder()
+	router.ServeHTTP(loginW, loginReq)
+
 	if loginW.Code != http.StatusOK {
-		t.Fatalf("expected status %d on login, got %d", http.StatusOK, loginW.Code)
+		t.Fatalf("expected status %d on login after verify, got %d", http.StatusOK, loginW.Code)
 	}
 
 	var loginRes loginResponse
@@ -115,7 +167,12 @@ func TestAuthRegisterLoginAndMe(t *testing.T) {
 }
 
 func TestModerationEndpointRequiresRole(t *testing.T) {
-	router := NewRouter(config.Config{AuthJWTSecret: "test-secret"})
+	logBuf := captureLogs(t)
+
+	router := NewRouter(config.Config{
+		AuthJWTSecret:      "test-secret",
+		EmailVerifyBaseURL: "http://localhost:3000/v1/auth/verify-email",
+	})
 
 	registerBody := map[string]string{
 		"email":    "user2@example.com",
@@ -137,6 +194,19 @@ func TestModerationEndpointRequiresRole(t *testing.T) {
 		"password": "strong-password",
 	}
 	loginRaw, _ := json.Marshal(loginBody)
+
+	verifyToken := extractVerifyTokenFromRegisterEmailLog(logBuf.String())
+	if verifyToken == "" {
+		t.Fatal("expected verify token to be present in register email log")
+	}
+
+	verifyReq := httptest.NewRequest(http.MethodGet, "/v1/auth/verify-email?token="+verifyToken, nil)
+	verifyW := httptest.NewRecorder()
+	router.ServeHTTP(verifyW, verifyReq)
+
+	if verifyW.Code != http.StatusOK {
+		t.Fatalf("expected status %d on verify, got %d", http.StatusOK, verifyW.Code)
+	}
 
 	loginReq := httptest.NewRequest(http.MethodPost, "/v1/auth/login", bytes.NewBuffer(loginRaw))
 	loginReq.Header.Set("Content-Type", "application/json")
@@ -160,4 +230,44 @@ func TestModerationEndpointRequiresRole(t *testing.T) {
 	if moderationW.Code != http.StatusForbidden {
 		t.Fatalf("expected status %d for user role on moderation endpoint, got %d", http.StatusForbidden, moderationW.Code)
 	}
+}
+
+func extractVerifyTokenFromRegisterEmailLog(body string) string {
+	const marker = "token="
+	idx := bytes.Index([]byte(body), []byte(marker))
+	if idx == -1 {
+		return ""
+	}
+
+	start := idx + len(marker)
+	if start >= len(body) {
+		return ""
+	}
+
+	end := start
+	for end < len(body) {
+		ch := body[end]
+		if (ch < '0' || ch > '9') && (ch < 'a' || ch > 'f') {
+			break
+		}
+		end++
+	}
+
+	if end == start {
+		return ""
+	}
+
+	return body[start:end]
+}
+
+func captureLogs(t *testing.T) *bytes.Buffer {
+	t.Helper()
+
+	buf := &bytes.Buffer{}
+	log.SetOutput(buf)
+	t.Cleanup(func() {
+		log.SetOutput(os.Stderr)
+	})
+
+	return buf
 }
