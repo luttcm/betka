@@ -14,6 +14,7 @@ import (
 var (
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	ErrEmailExists        = errors.New("email already exists")
+	ErrEmailNotVerified   = errors.New("email is not verified")
 	ErrInvalidVerifyToken = errors.New("invalid verify token")
 )
 
@@ -81,11 +82,18 @@ func (s *Service) Login(email, password string) (User, error) {
 		return User{}, ErrInvalidCredentials
 	}
 
+	if !u.EmailVerified {
+		return User{}, ErrEmailNotVerified
+	}
+
 	return *u, nil
 }
 
 func (s *Service) VerifyEmail(token string) (User, error) {
 	normalizedToken := strings.TrimSpace(token)
+	if normalizedToken == "" {
+		return User{}, ErrInvalidVerifyToken
+	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()

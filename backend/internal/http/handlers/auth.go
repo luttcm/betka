@@ -88,6 +88,11 @@ func (h *AuthHandler) Login(c *gin.Context) {
 			return
 		}
 
+		if errors.Is(err, auth.ErrEmailNotVerified) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "email is not verified"})
+			return
+		}
+
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to login"})
 		return
 	}
