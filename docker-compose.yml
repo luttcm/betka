@@ -19,6 +19,16 @@ services:
       PORT: ${PORT:-3000}
       DATABASE_URL: postgresql://${POSTGRES_USER:-bet_user}:${POSTGRES_PASSWORD:-bet_password}@postgres:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-bet_mvp}?sslmode=disable
       REDIS_URL: redis://redis:${REDIS_PORT:-6379}
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-dev-secret}
+      AUTH_TOKEN_TTL: ${AUTH_TOKEN_TTL:-24h}
+      EMAIL_FROM: ${EMAIL_FROM:-noreply@bet.local}
+      EMAIL_VERIFY_BASE_URL: ${EMAIL_VERIFY_BASE_URL:-http://localhost:3000/v1/auth/verify-email}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
     ports:
       - "${PORT:-3000}:3000"
     depends_on:

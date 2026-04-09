@@ -49,11 +49,16 @@ xdg-open http://localhost:3001
 - `REDIS_PORT`
 - `AUTH_JWT_SECRET`, `AUTH_TOKEN_TTL`
 - `EMAIL_FROM`, `EMAIL_VERIFY_BASE_URL`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`
+- `BOOTSTRAP_ADMIN_EMAIL`, `BOOTSTRAP_ADMIN_PASSWORD` (опционально, для dev-инициализации админа)
 
 Дополнительно присутствуют `DATABASE_URL` и `REDIS_URL` для локального запуска backend без Docker.
 В Docker Compose DSN формируются автоматически из базовых переменных.
 
 Если `SMTP_HOST`/`SMTP_PORT` не заданы, backend использует log-stub отправитель писем (ссылка подтверждения email будет в логах API).
+
+Если почта временно недоступна, можно создать/обновить админа при старте API через
+`BOOTSTRAP_ADMIN_EMAIL` + `BOOTSTRAP_ADMIN_PASSWORD`.
+Пользователь будет создан (или обновлён), получит роль `admin`, а `email_verified=true`.
 
 ## Auth flow (MVP)
 
