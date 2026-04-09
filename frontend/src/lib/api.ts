@@ -4,6 +4,8 @@ import {
   EventListResponse,
   LoginPayload,
   LoginResponse,
+  ModerationEventsResponse,
+  ModerationQueueItem,
   RegisterPayload,
   RegisterResponse,
   VerifyEmailResponse,
@@ -111,4 +113,43 @@ export async function verifyEmail(token: string): Promise<VerifyEmailResponse> {
   });
 
   return parseResponse<VerifyEmailResponse>(response);
+}
+
+export async function getModerationEvents(token: string): Promise<ModerationQueueItem[]> {
+  const response = await fetch(`${API_BASE_URL}/v1/moderation/events`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    cache: "no-store",
+  });
+
+  const payload = await parseResponse<ModerationEventsResponse>(response);
+  return payload.items;
+}
+
+export async function approveModerationEvent(eventId: string, token: string): Promise<EventItem> {
+  const response = await fetch(`${API_BASE_URL}/v1/moderation/events/${eventId}/approve`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  return parseResponse<EventItem>(response);
+}
+
+export async function rejectModerationEvent(eventId: string, reason: string, token: string): Promise<EventItem> {
+  const response = await fetch(`${API_BASE_URL}/v1/moderation/events/${eventId}/reject`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ reason }),
+  });
+
+  return parseResponse<EventItem>(response);
 }

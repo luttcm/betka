@@ -1,8 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 
 import { ApiError, getEventById } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 
 interface EventDetailsProps {
   eventId: string;
@@ -21,32 +23,34 @@ function formatDate(value: string): string {
 }
 
 export function EventDetails({ eventId }: EventDetailsProps) {
+  const { canModerate } = useAuth();
+
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["event", eventId],
     queryFn: () => getEventById(eventId),
   });
 
   if (isLoading) {
-    return <p className="rounded-lg border border-slate-200 bg-white p-4">Загрузка события...</p>;
+    return <p className="panel">Загрузка события...</p>;
   }
 
   if (isError) {
     const message = error instanceof ApiError ? error.message : "Не удалось получить событие";
     return (
-      <p className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
+      <p className="rounded-2xl border border-red-200 bg-red-50 p-4 text-red-700">
         Ошибка: {message}
       </p>
     );
   }
 
   if (!data) {
-    return <p className="rounded-lg border border-slate-200 bg-white p-4">Событие не найдено.</p>;
+    return <p className="panel">Событие не найдено.</p>;
   }
 
   return (
-    <article className="space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+    <article className="panel space-y-4">
       <header className="space-y-2">
-        <h2 className="text-2xl font-semibold">{data.title}</h2>
+        <h2 className="text-3xl font-semibold leading-tight">{data.title}</h2>
         <p className="text-sm text-slate-600">Категория: {data.category || "Без категории"}</p>
       </header>
 
@@ -59,14 +63,21 @@ export function EventDetails({ eventId }: EventDetailsProps) {
         </div>
         <div>
           <dt className="font-medium">Статус</dt>
-          <dd>{data.status}</dd>
+          <dd>
+            <span className="status-pill border-blue-200 bg-blue-50 text-blue-700">{data.status}</span>
+          </dd>
         </div>
         <div>
           <dt className="font-medium">Дата решения</dt>
           <dd>{formatDate(data.resolve_at)}</dd>
         </div>
       </dl>
+
+      {canModerate && (
+        <section className="rounded-2xl border border-[color:var(--muted-border)] bg-[var(--cool-surface)] p-4 text-sm text-slate-700">
+          Для действий модерации используйте вкладку <Link href="/moderation">«Модерация»</Link>.
+        </section>
+      )}
     </article>
   );
 }
-
