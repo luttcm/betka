@@ -1,0 +1,84 @@
+services:
+  migrate:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: bet_migrate
+    command: ["/app/goose", "-dir", "/app/migrations", "postgres", "postgresql://${POSTGRES_USER:-bet_user}:${POSTGRES_PASSWORD:-bet_password}@postgres:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-bet_mvp}?sslmode=disable", "up"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: bet_api
+    environment:
+      PORT: ${PORT:-3000}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-bet_user}:${POSTGRES_PASSWORD:-bet_password}@postgres:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-bet_mvp}?sslmode=disable
+      REDIS_URL: redis://redis:${REDIS_PORT:-6379}
+    ports:
+      - "${PORT:-3000}:3000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: bet_worker
+    command: ["/app/worker"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-bet_user}:${POSTGRES_PASSWORD:-bet_password}@postgres:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-bet_mvp}?sslmode=disable
+      REDIS_URL: redis://redis:${REDIS_PORT:-6379}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: bet_postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-bet_mvp}
+      POSTGRES_USER: ${POSTGRES_USER:-bet_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bet_password}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bet_user} -d ${POSTGRES_DB:-bet_mvp}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: bet_redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

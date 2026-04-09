@@ -1,0 +1,72 @@
+# Bet MVP
+
+MVP букмекерской платформы с демо-ставками на виртуальную валюту.
+
+## Стек
+
+- Go + Gin
+- PostgreSQL
+- Redis
+- Docker / Docker Compose
+
+## Быстрый старт
+
+1. Скопировать окружение:
+
+```bash
+cp .env.example .env
+```
+
+2. Запустить инфраструктуру, API и worker:
+
+```bash
+docker compose up --build
+```
+
+`docker-compose.yml` поднимает сервисы `migrate`, `api`, `worker`, `postgres`, `redis`.
+Сервис `migrate` автоматически применяет SQL-миграции через Goose перед стартом `api`/`worker`.
+
+3. Проверить health endpoint:
+
+```bash
+curl http://localhost:3000/health
+```
+
+## Переменные окружения
+
+Базовые переменные находятся в `.env.example`:
+
+- `PORT` — внешний порт API (по умолчанию `3000`)
+- `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_PORT`
+- `REDIS_PORT`
+
+Дополнительно присутствуют `DATABASE_URL` и `REDIS_URL` для локального запуска backend без Docker.
+В Docker Compose DSN формируются автоматически из базовых переменных.
+
+## Структура
+
+- `backend/` — API и worker
+- `frontend/` — web-клиент (на этапе baseline: каркас директории)
+- `docs/` — архитектура, доменные правила, тестирование, безопасность
+- `.github/workflows/` — CI pipeline
+- `plans/` — утвержденный план MVP
+
+## Локальный запуск backend без Docker
+
+```bash
+cd backend
+go run ./cmd/api
+```
+
+## Миграции (Goose)
+
+Миграции лежат в `backend/migrations`.
+
+Ручной запуск миграций локально:
+
+```bash
+cd backend
+go run github.com/pressly/goose/v3/cmd/goose@v3.24.1 \
+  -dir ./migrations \
+  postgres "postgresql://bet_user:bet_password@localhost:5432/bet_mvp?sslmode=disable" up
+```
