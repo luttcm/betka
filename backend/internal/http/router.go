@@ -5,6 +5,7 @@ import (
 
 	"bet/backend/internal/auth"
 	"bet/backend/internal/config"
+	"bet/backend/internal/events"
 	"bet/backend/internal/http/handlers"
 	"bet/backend/internal/http/middleware"
 	"bet/backend/internal/notifications"
@@ -15,6 +16,7 @@ func NewRouter(cfg config.Config) *gin.Engine {
 	router.Use(gin.Recovery(), gin.Logger())
 
 	authService := auth.NewService()
+	eventsService := events.NewService()
 	emailSender := notifications.NewSenderFromConfig(cfg)
 	authHandler := handlers.NewAuthHandler(
 		authService,
@@ -23,6 +25,7 @@ func NewRouter(cfg config.Config) *gin.Engine {
 		cfg.AuthTokenTTL,
 		cfg.EmailVerifyBaseURL,
 	)
+	eventsHandler := handlers.NewEventsHandler(eventsService)
 
 	router.GET("/health", handlers.Health)
 
@@ -43,10 +46,25 @@ func NewRouter(cfg config.Config) *gin.Engine {
 			meGroup.GET("", authHandler.Me)
 		}
 
+		eventsGroup := v1.Group("/events")
+		{
+			eventsGroup.GET("", eventsHandler.ListEvents)
+			eventsGroup.GET("/:id", eventsHandler.GetEvent)
+
+			eventsAuthGroup := eventsGroup.Group("")
+			eventsAuthGroup.Use(middleware.RequireAuth(cfg.AuthJWTSecret))
+			{
+				eventsAuthGroup.POST("", eventsHandler.CreateEvent)
+			}
+		}
+
 		moderationGroup := v1.Group("/moderation")
 		moderationGroup.Use(middleware.RequireRoles(cfg.AuthJWTSecret, "moderator", "admin"))
 		{
 			moderationGroup.GET("/health", handlers.Health)
+			moderationGroup.GET("/events", eventsHandler.ListModerationEvents)
+			moderationGroup.POST("/events/:id/approve", eventsHandler.ApproveEvent)
+			moderationGroup.POST("/events/:id/reject", eventsHandler.RejectEvent)
 		}
 	}
 
