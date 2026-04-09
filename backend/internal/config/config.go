@@ -1,22 +1,49 @@
 package config
 
-import "os"
+import (
+	"os"
+	"time"
+)
 
 type Config struct {
-	Port        string
-	DatabaseURL string
-	RedisURL    string
+	Port               string
+	DatabaseURL        string
+	RedisURL           string
+	AuthJWTSecret      string
+	AuthTokenTTL       time.Duration
+	EmailFrom          string
+	EmailVerifyBaseURL string
+	SMTPHost           string
+	SMTPPort           string
+	SMTPUsername       string
+	SMTPPassword       string
 }
 
 func Load() Config {
 	port := envOrDefault("PORT", "3000")
 	databaseURL := envOrDefault("DATABASE_URL", "postgresql://bet_user:bet_password@localhost:5432/bet_mvp?sslmode=disable")
 	redisURL := envOrDefault("REDIS_URL", "redis://localhost:6379")
+	authJWTSecret := envOrDefault("AUTH_JWT_SECRET", "dev-secret")
+	authTokenTTL := envDurationOrDefault("AUTH_TOKEN_TTL", 24*time.Hour)
+	emailFrom := envOrDefault("EMAIL_FROM", "noreply@bet.local")
+	emailVerifyBaseURL := envOrDefault("EMAIL_VERIFY_BASE_URL", "http://localhost:3000/v1/auth/verify-email")
+	smtpHost := envOrDefault("SMTP_HOST", "")
+	smtpPort := envOrDefault("SMTP_PORT", "")
+	smtpUsername := envOrDefault("SMTP_USERNAME", "")
+	smtpPassword := envOrDefault("SMTP_PASSWORD", "")
 
 	return Config{
-		Port:        port,
-		DatabaseURL: databaseURL,
-		RedisURL:    redisURL,
+		Port:               port,
+		DatabaseURL:        databaseURL,
+		RedisURL:           redisURL,
+		AuthJWTSecret:      authJWTSecret,
+		AuthTokenTTL:       authTokenTTL,
+		EmailFrom:          emailFrom,
+		EmailVerifyBaseURL: emailVerifyBaseURL,
+		SMTPHost:           smtpHost,
+		SMTPPort:           smtpPort,
+		SMTPUsername:       smtpUsername,
+		SMTPPassword:       smtpPassword,
 	}
 }
 
@@ -26,4 +53,18 @@ func envOrDefault(key, fallback string) string {
 	}
 
 	return fallback
+}
+
+func envDurationOrDefault(key string, fallback time.Duration) time.Duration {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback
+	}
+
+	parsed, err := time.ParseDuration(value)
+	if err != nil {
+		return fallback
+	}
+
+	return parsed
 }
