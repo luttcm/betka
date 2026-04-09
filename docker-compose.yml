@@ -48,6 +48,21 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: bet_frontend
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: /api
+      BACKEND_URL: http://api:3000
+    ports:
+      - "3001:3001"
+    depends_on:
+      api:
+        condition: service_started
+    restart: unless-stopped
+
   postgres:
     image: postgres:16-alpine
     container_name: bet_postgres
