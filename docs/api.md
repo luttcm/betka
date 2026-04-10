@@ -143,6 +143,7 @@
 
 - `GET /v1/admin/events/settlement-requests` — список событий в статусе `settlement_requested` (только `admin`)
 - `POST /v1/admin/events/:id/settle` — финализация события по исходу `winner_outcome` (`yes|no`, только `admin`)
+- Повторный settlement для уже завершенного события возвращает `409 Conflict`.
 
 Пример `POST /v1/admin/events/:id/settle` request:
 
@@ -151,6 +152,33 @@
   "winner_outcome": "yes"
 }
 ```
+
+Пример `POST /v1/admin/events/:id/settle` response:
+
+```json
+{
+  "event": {
+    "id": "1",
+    "status": "settled",
+    "winner_outcome": "yes"
+  },
+  "settled_bets": [
+    {
+      "id": "10",
+      "status": "won"
+    },
+    {
+      "id": "11",
+      "status": "lost"
+    }
+  ]
+}
+```
+
+Гарантии settlement:
+
+- Settlement выполняется атомарно: в одной транзакции фиксируются статус события, статусы ставок, зачисления победителям и запись аудита.
+- При любой ошибке в процессе изменения откатываются целиком.
 
 Пример `POST /v1/moderation/events/:id/reject` request:
 

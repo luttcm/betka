@@ -569,6 +569,29 @@ func TestAdminSettlementFlow(t *testing.T) {
 	if !bytes.Contains(txW.Body.Bytes(), []byte("\"type\":\"settle\"")) {
 		t.Fatalf("expected settle transaction in wallet transactions, body=%s", txW.Body.String())
 	}
+
+	repeatSettleReq := httptest.NewRequest(http.MethodPost, "/v1/admin/events/"+eventID+"/settle", bytes.NewBuffer(settleRaw))
+	repeatSettleReq.Header.Set("Content-Type", "application/json")
+	repeatSettleReq.Header.Set("Authorization", "Bearer "+adminToken)
+	repeatSettleW := httptest.NewRecorder()
+	router.ServeHTTP(repeatSettleW, repeatSettleReq)
+
+	if repeatSettleW.Code != http.StatusConflict {
+		t.Fatalf("expected status %d on repeat settlement, got %d, body=%s", http.StatusConflict, repeatSettleW.Code, repeatSettleW.Body.String())
+	}
+
+	txReq = httptest.NewRequest(http.MethodGet, "/v1/wallet/transactions", nil)
+	txReq.Header.Set("Authorization", "Bearer "+bettorToken)
+	txW = httptest.NewRecorder()
+	router.ServeHTTP(txW, txReq)
+
+	if txW.Code != http.StatusOK {
+		t.Fatalf("expected status %d on transactions list after repeat settlement, got %d", http.StatusOK, txW.Code)
+	}
+
+	if bytes.Count(txW.Body.Bytes(), []byte("\"type\":\"settle\"")) != 1 {
+		t.Fatalf("expected exactly one settle transaction after repeat settlement, body=%s", txW.Body.String())
+	}
 }
 
 func extractVerifyTokenFromRegisterEmailLog(body string) string {

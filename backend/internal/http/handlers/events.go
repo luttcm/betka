@@ -217,29 +217,20 @@ func (h *EventsHandler) SettleEvent(c *gin.Context) {
 		return
 	}
 
-	e, err := h.service.SettleEvent(c.Param("id"), req.WinnerOutcome)
+	e, settledBets, err := h.betsService.SettleEventAndBets(c.Param("id"), req.WinnerOutcome)
 	if err != nil {
 		switch {
 		case errors.Is(err, events.ErrEventNotFound):
 			c.JSON(http.StatusNotFound, gin.H{"error": "event not found"})
 		case errors.Is(err, events.ErrInvalidSettlementInput):
 			c.JSON(http.StatusBadRequest, gin.H{"error": "winner_outcome must be yes or no"})
+		case errors.Is(err, bets.ErrInvalidSettlement):
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid settlement"})
 		case errors.Is(err, events.ErrEventNotSettlable):
 			c.JSON(http.StatusConflict, gin.H{"error": "event is not settlable"})
 		default:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to settle event"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to settle event and bets"})
 		}
-		return
-	}
-
-	settledBets, err := h.betsService.SettleEventBets(e.ID, e.WinnerOutcome)
-	if err != nil {
-		if errors.Is(err, bets.ErrInvalidSettlement) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid settlement"})
-			return
-		}
-
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to settle bets"})
 		return
 	}
 
