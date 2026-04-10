@@ -2,6 +2,7 @@ package http
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"time"
 
@@ -26,13 +27,19 @@ func NewRouter(cfg config.Config) *gin.Engine {
 	if cfg.DatabaseURL != "" {
 		opened, err := sql.Open("postgres", cfg.DatabaseURL)
 		if err != nil {
-			log.Printf("failed to initialize postgres driver: %v", err)
+			if cfg.RequirePostgres {
+				panic(fmt.Sprintf("failed to initialize postgres driver: %v", err))
+			}
+			log.Printf("failed to initialize postgres driver, fallback to in-memory services: %v", err)
 		} else {
 			opened.SetConnMaxLifetime(30 * time.Minute)
 			opened.SetMaxOpenConns(10)
 			opened.SetMaxIdleConns(5)
 
 			if pingErr := opened.Ping(); pingErr != nil {
+				if cfg.RequirePostgres {
+					panic(fmt.Sprintf("postgres unavailable: %v", pingErr))
+				}
 				log.Printf("postgres unavailable, fallback to in-memory services: %v", pingErr)
 				_ = opened.Close()
 			} else {
@@ -40,6 +47,8 @@ func NewRouter(cfg config.Config) *gin.Engine {
 				log.Printf("postgres connected")
 			}
 		}
+	} else if cfg.RequirePostgres {
+		panic("postgres is required but DATABASE_URL is empty")
 	}
 
 	authService := auth.NewServiceWithDB(db)
