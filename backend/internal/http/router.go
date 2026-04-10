@@ -1,9 +1,12 @@
 package http
 
 import (
+	"database/sql"
 	"log"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	_ "github.com/lib/pq"
 
 	"bet/backend/internal/auth"
 	"bet/backend/internal/bets"
@@ -19,7 +22,27 @@ func NewRouter(cfg config.Config) *gin.Engine {
 	router := gin.New()
 	router.Use(gin.Recovery(), gin.Logger())
 
-	authService := auth.NewService()
+	var db *sql.DB
+	if cfg.DatabaseURL != "" {
+		opened, err := sql.Open("postgres", cfg.DatabaseURL)
+		if err != nil {
+			log.Printf("failed to initialize postgres driver: %v", err)
+		} else {
+			opened.SetConnMaxLifetime(30 * time.Minute)
+			opened.SetMaxOpenConns(10)
+			opened.SetMaxIdleConns(5)
+
+			if pingErr := opened.Ping(); pingErr != nil {
+				log.Printf("postgres unavailable, fallback to in-memory services: %v", pingErr)
+				_ = opened.Close()
+			} else {
+				db = opened
+				log.Printf("postgres connected")
+			}
+		}
+	}
+
+	authService := auth.NewServiceWithDB(db)
 	if cfg.BootstrapAdminEmail != "" && cfg.BootstrapAdminPassword != "" {
 		adminUser, err := authService.BootstrapAdmin(cfg.BootstrapAdminEmail, cfg.BootstrapAdminPassword)
 		if err != nil {
@@ -29,9 +52,9 @@ func NewRouter(cfg config.Config) *gin.Engine {
 		}
 	}
 
-	eventsService := events.NewService()
-	walletService := wallet.NewService(1000)
-	betsService := bets.NewService(eventsService, walletService)
+	eventsService := events.NewServiceWithDB(db)
+	walletService := wallet.NewServiceWithDB(db, 1000)
+	betsService := bets.NewServiceWithDB(db, eventsService, walletService)
 	emailSender := notifications.NewSenderFromConfig(cfg)
 	authHandler := handlers.NewAuthHandler(
 		authService,
