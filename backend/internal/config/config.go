@@ -8,6 +8,7 @@ import (
 type Config struct {
 	Port                   string
 	DatabaseURL            string
+	RequirePostgres        bool
 	RedisURL               string
 	AuthJWTSecret          string
 	AuthTokenTTL           time.Duration
@@ -24,6 +25,7 @@ type Config struct {
 func Load() Config {
 	port := envOrDefault("PORT", "3000")
 	databaseURL := envOrDefault("DATABASE_URL", "postgresql://bet_user:bet_password@localhost:5432/bet_mvp?sslmode=disable")
+	requirePostgres := envBoolOrDefault("REQUIRE_POSTGRES", true)
 	redisURL := envOrDefault("REDIS_URL", "redis://localhost:6379")
 	authJWTSecret := envOrDefault("AUTH_JWT_SECRET", "dev-secret")
 	authTokenTTL := envDurationOrDefault("AUTH_TOKEN_TTL", 24*time.Hour)
@@ -39,6 +41,7 @@ func Load() Config {
 	return Config{
 		Port:                   port,
 		DatabaseURL:            databaseURL,
+		RequirePostgres:        requirePostgres,
 		RedisURL:               redisURL,
 		AuthJWTSecret:          authJWTSecret,
 		AuthTokenTTL:           authTokenTTL,
@@ -50,6 +53,22 @@ func Load() Config {
 		SMTPPassword:           smtpPassword,
 		BootstrapAdminEmail:    bootstrapAdminEmail,
 		BootstrapAdminPassword: bootstrapAdminPassword,
+	}
+}
+
+func envBoolOrDefault(key string, fallback bool) bool {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback
+	}
+
+	switch value {
+	case "1", "true", "TRUE", "True", "yes", "YES", "on", "ON":
+		return true
+	case "0", "false", "FALSE", "False", "no", "NO", "off", "OFF":
+		return false
+	default:
+		return fallback
 	}
 }
 

@@ -594,6 +594,208 @@ func TestAdminSettlementFlow(t *testing.T) {
 	}
 }
 
+func TestMVPE2ERegisterCreateModerateBetSettle(t *testing.T) {
+	logBuf := captureLogs(t)
+	router := NewRouter(config.Config{
+		AuthJWTSecret:      "test-secret",
+		EmailVerifyBaseURL: "http://localhost:3000/v1/auth/verify-email",
+	})
+
+	seenTokens := 0
+
+	creatorToken := registerVerifyAndLogin(t, router, logBuf, &seenTokens, "creator.mvp@example.com", "strong-password")
+	bettorToken := registerVerifyAndLogin(t, router, logBuf, &seenTokens, "bettor.mvp@example.com", "strong-password")
+
+	moderatorToken, err := auth.IssueToken("test-secret", time.Hour, "usr_mod_mvp", "moderator")
+	if err != nil {
+		t.Fatalf("failed to issue moderator token: %v", err)
+	}
+
+	adminToken, err := auth.IssueToken("test-secret", time.Hour, "usr_admin_mvp", "admin")
+	if err != nil {
+		t.Fatalf("failed to issue admin token: %v", err)
+	}
+
+	resolveAt := time.Now().UTC().Add(24 * time.Hour).Format(time.RFC3339)
+	createBody := map[string]string{
+		"title":       "Will MVP e2e flow pass?",
+		"description": "End-to-end flow test",
+		"category":    "qa",
+		"resolve_at":  resolveAt,
+	}
+	createRaw, _ := json.Marshal(createBody)
+
+	createReq := httptest.NewRequest(http.MethodPost, "/v1/events", bytes.NewBuffer(createRaw))
+	createReq.Header.Set("Content-Type", "application/json")
+	createReq.Header.Set("Authorization", "Bearer "+creatorToken)
+	createW := httptest.NewRecorder()
+	router.ServeHTTP(createW, createReq)
+
+	if createW.Code != http.StatusCreated {
+		t.Fatalf("expected status %d on event create, got %d, body=%s", http.StatusCreated, createW.Code, createW.Body.String())
+	}
+
+	var created map[string]any
+	if err := json.Unmarshal(createW.Body.Bytes(), &created); err != nil {
+		t.Fatalf("failed to parse create event response: %v", err)
+	}
+
+	eventID, _ := created["id"].(string)
+	if eventID == "" {
+		t.Fatalf("expected event id in create response, got: %s", createW.Body.String())
+	}
+
+	approveReq := httptest.NewRequest(http.MethodPost, "/v1/moderation/events/"+eventID+"/approve", nil)
+	approveReq.Header.Set("Authorization", "Bearer "+moderatorToken)
+	approveW := httptest.NewRecorder()
+	router.ServeHTTP(approveW, approveReq)
+
+	if approveW.Code != http.StatusOK {
+		t.Fatalf("expected status %d on approve, got %d, body=%s", http.StatusOK, approveW.Code, approveW.Body.String())
+	}
+
+	betBody := map[string]any{
+		"event_id":     eventID,
+		"outcome_code": "yes",
+		"stake":        100.0,
+	}
+	betRaw, _ := json.Marshal(betBody)
+
+	placeReq := httptest.NewRequest(http.MethodPost, "/v1/bets", bytes.NewBuffer(betRaw))
+	placeReq.Header.Set("Content-Type", "application/json")
+	placeReq.Header.Set("Authorization", "Bearer "+bettorToken)
+	placeReq.Header.Set("Idempotency-Key", "idem-mvp-e2e-1")
+	placeW := httptest.NewRecorder()
+	router.ServeHTTP(placeW, placeReq)
+
+	if placeW.Code != http.StatusCreated {
+		t.Fatalf("expected status %d on place bet, got %d, body=%s", http.StatusCreated, placeW.Code, placeW.Body.String())
+	}
+
+	requestSettlementBody := map[string]any{"evidence_url": "https://example.com/mvp-e2e-proof"}
+	requestSettlementRaw, _ := json.Marshal(requestSettlementBody)
+
+	requestSettlementReq := httptest.NewRequest(http.MethodPost, "/v1/events/"+eventID+"/request-settlement", bytes.NewBuffer(requestSettlementRaw))
+	requestSettlementReq.Header.Set("Content-Type", "application/json")
+	requestSettlementReq.Header.Set("Authorization", "Bearer "+creatorToken)
+	requestSettlementW := httptest.NewRecorder()
+	router.ServeHTTP(requestSettlementW, requestSettlementReq)
+
+	if requestSettlementW.Code != http.StatusOK {
+		t.Fatalf("expected status %d on settlement request, got %d, body=%s", http.StatusOK, requestSettlementW.Code, requestSettlementW.Body.String())
+	}
+
+	settleBody := map[string]string{"winner_outcome": "yes"}
+	settleRaw, _ := json.Marshal(settleBody)
+
+	settleReq := httptest.NewRequest(http.MethodPost, "/v1/admin/events/"+eventID+"/settle", bytes.NewBuffer(settleRaw))
+	settleReq.Header.Set("Content-Type", "application/json")
+	settleReq.Header.Set("Authorization", "Bearer "+adminToken)
+	settleW := httptest.NewRecorder()
+	router.ServeHTTP(settleW, settleReq)
+
+	if settleW.Code != http.StatusOK {
+		t.Fatalf("expected status %d on settlement, got %d, body=%s", http.StatusOK, settleW.Code, settleW.Body.String())
+	}
+
+	if !bytes.Contains(settleW.Body.Bytes(), []byte("\"status\":\"settled\"")) {
+		t.Fatalf("expected settled event in response, body=%s", settleW.Body.String())
+	}
+
+	if !bytes.Contains(settleW.Body.Bytes(), []byte("\"status\":\"won\"")) {
+		t.Fatalf("expected won bet status in settlement response, body=%s", settleW.Body.String())
+	}
+
+	walletReq := httptest.NewRequest(http.MethodGet, "/v1/wallet", nil)
+	walletReq.Header.Set("Authorization", "Bearer "+bettorToken)
+	walletW := httptest.NewRecorder()
+	router.ServeHTTP(walletW, walletReq)
+
+	if walletW.Code != http.StatusOK {
+		t.Fatalf("expected status %d on wallet get after settlement, got %d", http.StatusOK, walletW.Code)
+	}
+
+	if !bytes.Contains(walletW.Body.Bytes(), []byte("1090")) {
+		t.Fatalf("expected wallet payout after settlement, body=%s", walletW.Body.String())
+	}
+
+	txReq := httptest.NewRequest(http.MethodGet, "/v1/wallet/transactions", nil)
+	txReq.Header.Set("Authorization", "Bearer "+bettorToken)
+	txW := httptest.NewRecorder()
+	router.ServeHTTP(txW, txReq)
+
+	if txW.Code != http.StatusOK {
+		t.Fatalf("expected status %d on transactions list after settlement, got %d", http.StatusOK, txW.Code)
+	}
+
+	if !bytes.Contains(txW.Body.Bytes(), []byte("\"type\":\"hold\"")) {
+		t.Fatalf("expected hold transaction in wallet transactions, body=%s", txW.Body.String())
+	}
+
+	if !bytes.Contains(txW.Body.Bytes(), []byte("\"type\":\"settle\"")) {
+		t.Fatalf("expected settle transaction in wallet transactions, body=%s", txW.Body.String())
+	}
+}
+
+func registerVerifyAndLogin(t *testing.T, router http.Handler, logBuf *bytes.Buffer, seenTokens *int, email, password string) string {
+	t.Helper()
+
+	registerBody := map[string]string{
+		"email":    email,
+		"password": password,
+	}
+	registerRaw, _ := json.Marshal(registerBody)
+
+	registerReq := httptest.NewRequest(http.MethodPost, "/v1/auth/register", bytes.NewBuffer(registerRaw))
+	registerReq.Header.Set("Content-Type", "application/json")
+	registerW := httptest.NewRecorder()
+	router.ServeHTTP(registerW, registerReq)
+
+	if registerW.Code != http.StatusCreated {
+		t.Fatalf("expected status %d on register for %s, got %d, body=%s", http.StatusCreated, email, registerW.Code, registerW.Body.String())
+	}
+
+	verifyToken, nextSeen := waitForNextVerifyTokenInLogs(logBuf, *seenTokens)
+	if verifyToken == "" {
+		t.Fatalf("expected verify token to be present in register email log for %s", email)
+	}
+	*seenTokens = nextSeen
+
+	verifyReq := httptest.NewRequest(http.MethodGet, "/v1/auth/verify-email?token="+verifyToken, nil)
+	verifyW := httptest.NewRecorder()
+	router.ServeHTTP(verifyW, verifyReq)
+
+	if verifyW.Code != http.StatusOK {
+		t.Fatalf("expected status %d on verify for %s, got %d, body=%s", http.StatusOK, email, verifyW.Code, verifyW.Body.String())
+	}
+
+	loginBody := map[string]string{
+		"email":    email,
+		"password": password,
+	}
+	loginRaw, _ := json.Marshal(loginBody)
+
+	loginReq := httptest.NewRequest(http.MethodPost, "/v1/auth/login", bytes.NewBuffer(loginRaw))
+	loginReq.Header.Set("Content-Type", "application/json")
+	loginW := httptest.NewRecorder()
+	router.ServeHTTP(loginW, loginReq)
+
+	if loginW.Code != http.StatusOK {
+		t.Fatalf("expected status %d on login for %s, got %d, body=%s", http.StatusOK, email, loginW.Code, loginW.Body.String())
+	}
+
+	var loginRes loginResponse
+	if err := json.Unmarshal(loginW.Body.Bytes(), &loginRes); err != nil {
+		t.Fatalf("failed to parse login response for %s: %v", email, err)
+	}
+
+	if loginRes.AccessToken == "" {
+		t.Fatalf("expected access token on login for %s, body=%s", email, loginW.Body.String())
+	}
+
+	return loginRes.AccessToken
+}
+
 func extractVerifyTokenFromRegisterEmailLog(body string) string {
 	const marker = "token="
 	idx := bytes.Index([]byte(body), []byte(marker))
@@ -622,16 +824,63 @@ func extractVerifyTokenFromRegisterEmailLog(body string) string {
 	return body[start:end]
 }
 
+func extractVerifyTokensFromRegisterEmailLog(body string) []string {
+	const marker = "token="
+	tokens := make([]string, 0)
+
+	searchFrom := 0
+	for searchFrom < len(body) {
+		relIdx := bytes.Index([]byte(body[searchFrom:]), []byte(marker))
+		if relIdx == -1 {
+			break
+		}
+
+		idx := searchFrom + relIdx
+		start := idx + len(marker)
+		if start >= len(body) {
+			break
+		}
+
+		end := start
+		for end < len(body) {
+			ch := body[end]
+			if (ch < '0' || ch > '9') && (ch < 'a' || ch > 'f') {
+				break
+			}
+			end++
+		}
+
+		if end > start {
+			tokens = append(tokens, body[start:end])
+		}
+
+		searchFrom = end
+	}
+
+	return tokens
+}
+
 func waitForVerifyTokenInLogs(buf *bytes.Buffer) string {
+	token, _ := waitForNextVerifyTokenInLogs(buf, 0)
+	return token
+}
+
+func waitForNextVerifyTokenInLogs(buf *bytes.Buffer, seen int) (string, int) {
 	deadline := time.Now().Add(500 * time.Millisecond)
 	for time.Now().Before(deadline) {
-		if token := extractVerifyTokenFromRegisterEmailLog(buf.String()); token != "" {
-			return token
+		tokens := extractVerifyTokensFromRegisterEmailLog(buf.String())
+		if len(tokens) > seen {
+			return tokens[seen], len(tokens)
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	return extractVerifyTokenFromRegisterEmailLog(buf.String())
+	tokens := extractVerifyTokensFromRegisterEmailLog(buf.String())
+	if len(tokens) > seen {
+		return tokens[seen], len(tokens)
+	}
+
+	return "", seen
 }
 
 func captureLogs(t *testing.T) *bytes.Buffer {
