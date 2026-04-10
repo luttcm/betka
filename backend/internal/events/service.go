@@ -13,6 +13,7 @@ import (
 
 var (
 	ErrInvalidEventInput          = errors.New("invalid event input")
+	ErrInvalidActorID             = errors.New("invalid actor id")
 	ErrEventNotFound              = errors.New("event not found")
 	ErrModerationAlreadyHandled   = errors.New("moderation task already handled")
 	ErrInvalidModerationReason    = errors.New("invalid moderation reason")
@@ -58,6 +59,50 @@ type Service struct {
 	taskSeq         int64
 }
 
+func EnsureSchema(db *sql.DB) error {
+	if db == nil {
+		return nil
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec(`
+		ALTER TABLE events
+			ADD COLUMN IF NOT EXISTS settlement_requested_by BIGINT REFERENCES users(id),
+			ADD COLUMN IF NOT EXISTS settlement_requested_at TIMESTAMPTZ,
+			ADD COLUMN IF NOT EXISTS settlement_evidence_url TEXT,
+			ADD COLUMN IF NOT EXISTS settlement_evidence_file_name TEXT,
+			ADD COLUMN IF NOT EXISTS settlement_evidence_file_data TEXT
+	`); err != nil {
+		return err
+	}
+
+	if _, err := tx.Exec(`ALTER TABLE events DROP CONSTRAINT IF EXISTS events_status_check`); err != nil {
+		return err
+	}
+
+	if _, err := tx.Exec(`
+		ALTER TABLE events
+			ADD CONSTRAINT events_status_check
+			CHECK (status IN ('draft', 'pending', 'approved', 'settlement_requested', 'rejected', 'settled', 'canceled'))
+	`); err != nil {
+		return err
+	}
+
+	if _, err := tx.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_events_status_settlement_requested_at
+			ON events(status, settlement_requested_at DESC)
+	`); err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
 func NewService() *Service {
 	return &Service{
 		eventsByID:      make(map[string]*Event),
@@ -85,7 +130,7 @@ func (s *Service) CreateEvent(creatorUserID, title, description, category string
 	if s.db != nil {
 		creatorID, err := parseIntID(creatorUserID)
 		if err != nil {
-			return Event{}, ErrInvalidEventInput
+			return Event{}, ErrInvalidActorID
 		}
 
 		tx, err := s.db.Begin()
@@ -175,13 +220,13 @@ func (s *Service) ListApprovedEvents() []Event {
 	if s.db != nil {
 		rows, err := s.db.Query(
 			`SELECT id, creator_user_id, title, description, category, resolve_at, status,
-			        COALESCE(winner_outcome, ''),
-			        COALESCE(settlement_requested_by, 0), settlement_requested_at,
-			        COALESCE(settlement_evidence_url, ''), COALESCE(settlement_evidence_file_name, ''), COALESCE(settlement_evidence_file_data, ''),
-			        created_at
-			 FROM events
-			 WHERE status = 'approved'
-			 ORDER BY created_at DESC`,
+		        COALESCE(winner_outcome, ''),
+		        COALESCE(settlement_requested_by, 0), settlement_requested_at,
+		        COALESCE(settlement_evidence_url, ''), COALESCE(settlement_evidence_file_name, ''), COALESCE(settlement_evidence_file_data, ''),
+		        created_at
+		 FROM events
+		 WHERE status IN ('approved', 'settlement_requested', 'settled')
+		 ORDER BY created_at DESC`,
 		)
 		if err != nil {
 			return []Event{}
@@ -234,7 +279,7 @@ func (s *Service) ListApprovedEvents() []Event {
 
 	items := make([]Event, 0)
 	for _, e := range s.eventsByID {
-		if e.Status == "approved" {
+		if e.Status == "approved" || e.Status == "settlement_requested" || e.Status == "settled" {
 			items = append(items, *e)
 		}
 	}
@@ -651,7 +696,7 @@ func (s *Service) RequestSettlement(eventID, requesterUserID, evidenceURL, evide
 
 		rid, err := parseIntID(requesterUserID)
 		if err != nil {
-			return Event{}, ErrInvalidSettlementInput
+			return Event{}, ErrInvalidActorID
 		}
 
 		var (

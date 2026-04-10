@@ -84,6 +84,11 @@ func (h *EventsHandler) CreateEvent(c *gin.Context) {
 			return
 		}
 
+		if errors.Is(err, events.ErrInvalidActorID) {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid auth subject"})
+			return
+		}
+
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create event"})
 		return
 	}
@@ -191,6 +196,8 @@ func (h *EventsHandler) RequestSettlement(c *gin.Context) {
 		switch {
 		case errors.Is(err, events.ErrEventNotFound):
 			c.JSON(http.StatusNotFound, gin.H{"error": "event not found"})
+		case errors.Is(err, events.ErrInvalidActorID):
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid auth subject"})
 		case errors.Is(err, events.ErrForbiddenSettlementRequest):
 			c.JSON(http.StatusForbidden, gin.H{"error": "only event creator can request settlement"})
 		case errors.Is(err, events.ErrInvalidSettlementEvidence):
