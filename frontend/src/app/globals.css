@@ -39,10 +39,6 @@ a {
     @apply rounded-xl border border-[color:var(--muted-border)] bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,0.08)];
   }
 
-  .panel-dark {
-    @apply rounded-xl border border-[#d8e1ec] bg-[#e9eff7] p-6 text-[#2c2d2e];
-  }
-
   .page-title {
     @apply text-4xl font-semibold leading-[1.05] text-[#2c2d2e] md:text-5xl;
   }
@@ -73,6 +69,14 @@ a {
 
   .btn-danger {
     @apply btn border-red-300 bg-red-50 text-red-700 hover:bg-red-100;
+  }
+
+  .nav-link {
+    @apply rounded-md px-3 py-1.5 text-sm text-white/90 transition hover:bg-white/15 hover:text-white;
+  }
+
+  .nav-link-button {
+    @apply nav-link border-0 bg-transparent;
   }
 
   .status-pill {

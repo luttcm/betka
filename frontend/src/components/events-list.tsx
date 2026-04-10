@@ -7,6 +7,9 @@ import { useMemo } from "react";
 import { ApiError, getEvents } from "@/lib/api";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui-states";
 
+type EventList = Awaited<ReturnType<typeof getEvents>>;
+type EventGroup = { category: string; items: EventList };
+
 function formatDate(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -27,10 +30,10 @@ export function EventsList() {
 
   const grouped = useMemo(() => {
     if (!data) {
-      return [] as Array<{ category: string; items: typeof data }>;
+      return [] as EventGroup[];
     }
 
-    const map = new Map<string, typeof data>();
+    const map = new Map<string, EventList>();
     for (const event of data) {
       const key = event.category?.trim() || "Без категории";
       const next = map.get(key) ?? [];
@@ -62,11 +65,11 @@ export function EventsList() {
         <section key={column.category} className="panel space-y-3">
           <header className="flex items-center justify-between gap-2 border-b border-[color:var(--muted-border)] pb-2">
             <h3 className="text-sm font-semibold text-slate-700">{column.category}</h3>
-            <span className="status-pill border-[color:var(--muted-border)] bg-[#f5f7fa] text-slate-600">{column.items.length}</span>
+            <span className="status-pill border-[color:var(--muted-border)] bg-[#f5f7fa] text-slate-600">{column.items?.length ?? 0}</span>
           </header>
 
           <div className="space-y-3">
-            {column.items.map((event) => (
+            {(column.items ?? []).map((event: EventList[number]) => (
               <article key={event.id} className="rounded-lg border border-[color:var(--muted-border)] bg-[#f8fafc] p-3">
                 <h2 className="text-base font-semibold text-slate-800">{event.title}</h2>
                 <p className="mt-1 text-sm text-slate-600">{event.description}</p>

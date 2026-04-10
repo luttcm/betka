@@ -98,7 +98,7 @@ export function ModerationEventsPanel() {
 
   return (
     <div className="grid gap-4">
-      {data.map((queueItem) => {
+      {(data ?? []).map((queueItem) => {
         const event = queueItem.event;
         const rejectReason = rejectReasons[event.id] ?? "";
 

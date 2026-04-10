@@ -35,7 +35,7 @@ export default function MyBetsPage() {
 
   return (
     <section className="space-y-6">
-      <div className="panel-dark">
+      <div className="panel">
         <p className="text-xs uppercase tracking-[0.2em] text-[var(--brand-accent)]">Bet History</p>
         <h2 className="text-4xl font-medium leading-[1.05] md:text-5xl">Мои ставки</h2>
         <p className="mt-3 text-sm text-slate-600 md:text-base">Список ставок с сортировкой по времени и фильтром по статусу.</p>

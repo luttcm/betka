@@ -41,7 +41,7 @@ Frontend-часть MVP на Next.js + TypeScript.
 ## Дизайн-система (текущая реализация)
 
 - Визуальная база приведена к стилистике из [`DESIGN.md`](../DESIGN.md): акцентный синий `#0052ff`, тёмные hero-блоки и pill-кнопки.
-- Общие UI-классы вынесены в [`globals.css`](src/app/globals.css): `btn-primary`, `btn-secondary`, `btn-danger`, `panel`, `panel-dark`, `text-input`.
+- Общие UI-классы вынесены в [`globals.css`](src/app/globals.css): `btn-primary`, `btn-secondary`, `btn-danger`, `panel`, `text-input`.
 - Унифицированы состояния загрузки/ошибки/пустых данных через компонент `ui-states`.
 
 ## Локальный запуск
