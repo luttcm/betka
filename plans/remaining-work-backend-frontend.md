@@ -30,7 +30,7 @@
 
 ### P0 (критично для MVP)
 
-- [ ] Прогнать `lint/build` и устранить реальные регрессии (сейчас блокер окружения: нет `npm`). (???? я думаю тут можно через докер запускать ????)
+- [x] Прогнать `lint/build` через Docker и устранить реальные регрессии (`docker compose run --rm --build frontend npm run lint` и `docker compose run --rm --build frontend npm run build`).
 - [ ] Проверить весь e2e UX-флоу на реальном рантайме (auth/event/moderation/bet/wallet/settlement).
 - [ ] Финально сверить UI с backend-контрактами после стабилизации PostgreSQL-репозиториев.
 

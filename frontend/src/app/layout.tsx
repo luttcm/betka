@@ -27,10 +27,10 @@ export default function RootLayout({
                   ДОДЕП (Аренда 60-54-04)
                 </Link>
                 <nav className="flex items-center gap-2">
-                  <Link href="/" className="rounded-md bg-white/15 px-3 py-1.5 text-sm text-white hover:bg-white/15">
+                  <Link href="/" className="nav-link">
                     Каталог
                   </Link>
-                  <Link href="/events/new" className="rounded-md px-3 py-1.5 text-sm text-white/90 hover:bg-white/15 hover:text-white">
+                  <Link href="/events/new" className="nav-link">
                     Создать событие
                   </Link>
                 </nav>

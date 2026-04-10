@@ -10,10 +10,10 @@ export function AuthNav() {
   if (!isAuthenticated) {
     return (
       <div className="flex items-center gap-3 text-sm">
-        <Link href="/auth/register" className="text-white/85 hover:text-white">
+        <Link href="/auth/register" className="nav-link">
           Регистрация
         </Link>
-        <Link href="/auth/login" className="rounded-md bg-white/15 px-3 py-1.5 text-white hover:bg-white/20">
+        <Link href="/auth/login" className="nav-link">
           Вход
         </Link>
       </div>
@@ -22,14 +22,14 @@ export function AuthNav() {
 
   return (
     <div className="flex flex-wrap items-center gap-3 text-sm">
-      <Link href="/wallet" className="text-white/90 hover:text-white">
+      <Link href="/wallet" className="nav-link">
         Кошелёк
       </Link>
-      <Link href="/bets/my" className="text-white/90 hover:text-white">
+      <Link href="/bets/my" className="nav-link">
         Мои ставки
       </Link>
       {canModerate && (
-        <Link href="/moderation" className="text-white/90 hover:text-white">
+        <Link href="/moderation" className="nav-link">
           Модерация
         </Link>
       )}
@@ -44,7 +44,7 @@ export function AuthNav() {
       <button
         type="button"
         onClick={signOut}
-        className="text-white/90 hover:text-white"
+        className="nav-link-button"
       >
         Выйти
       </button>

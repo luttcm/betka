@@ -47,7 +47,7 @@ export default function WalletPage() {
 
   return (
     <section className="space-y-6">
-      <div className="panel-dark">
+      <div className="panel">
         <p className="text-xs uppercase tracking-[0.2em] text-[var(--brand-accent)]">Account Ledger</p>
         <h2 className="text-4xl font-medium leading-[1.05] md:text-5xl">Кошелёк</h2>
         <p className="mt-3 text-sm text-slate-600 md:text-base">Текущий баланс и история всех финансовых операций.</p>
