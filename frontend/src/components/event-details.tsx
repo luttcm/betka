@@ -158,11 +158,11 @@ export function EventDetails({ eventId }: EventDetailsProps) {
   return (
     <article className="panel space-y-4">
       <header className="space-y-2">
-        <h2 className="text-3xl font-semibold leading-tight">{data.title}</h2>
+        <h2 className="text-3xl font-semibold leading-tight text-slate-800">{data.title}</h2>
         <p className="text-sm text-slate-600">Категория: {data.category || "Без категории"}</p>
       </header>
 
-      <p className="text-slate-800">{data.description}</p>
+      <p className="text-slate-700">{data.description}</p>
 
       <dl className="grid gap-2 text-sm text-slate-600">
         <div>
@@ -181,13 +181,13 @@ export function EventDetails({ eventId }: EventDetailsProps) {
         </div>
       </dl>
 
-      <section className="rounded-2xl border border-[color:var(--muted-border)] bg-[var(--cool-surface)] p-4">
-        <h3 className="text-lg font-semibold text-slate-900">Сделать ставку</h3>
+      <section className="border border-[color:var(--muted-border)] bg-[#f8fafc] p-4">
+        <h3 className="text-lg font-semibold text-slate-800">Сделать ставку</h3>
         <p className="mt-1 text-sm text-slate-600">
           Выберите исход, укажите сумму и отправьте ставку с защитой от дублей по <code>Idempotency-Key</code>.
         </p>
 
-        <div className="mt-3 grid gap-2 rounded-xl border border-[color:var(--muted-border)] bg-white p-3 text-sm text-slate-700 md:grid-cols-2">
+        <div className="mt-3 grid gap-2 border border-[color:var(--muted-border)] bg-[#f5f7fa] p-3 text-sm text-slate-600 md:grid-cols-2">
           <p>
             Коэффициент <b>YES</b>: <span className="font-semibold">{formatOdds(oddsQuery.data?.odds.yes ?? 2)}</span>
           </p>
@@ -197,13 +197,13 @@ export function EventDetails({ eventId }: EventDetailsProps) {
         </div>
 
         {!isAuthenticated && (
-          <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          <p className="mt-3 border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
             Для ставки нужно <Link href="/auth/login">войти</Link> в аккаунт.
           </p>
         )}
 
         {isAuthenticated && !canBetOnEvent && (
-          <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          <p className="mt-3 border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
             Ставки доступны только для событий в статусе <b>approved</b>.
           </p>
         )}
@@ -243,24 +243,24 @@ export function EventDetails({ eventId }: EventDetailsProps) {
         </div>
 
         {isAuthenticated && isStakeInvalid && (
-          <p className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          <p className="mt-3 border border-red-200 bg-red-50 p-3 text-sm text-red-700">
             Укажите корректную сумму больше 0.
           </p>
         )}
 
         {!isStakeInvalid && (
-          <p className="mt-3 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+          <p className="mt-3 border border-blue-200 bg-blue-50 p-3 text-sm text-blue-700">
             Потенциальная выплата по выбранному исходу: <b>{formatAmount(potentialPayout)} TOK</b> (коэфф. x
             {formatOdds(selectedOdds)}).
           </p>
         )}
 
         {betMutation.isError && (
-          <p className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{placeBetError}</p>
+          <p className="mt-3 border border-red-200 bg-red-50 p-3 text-sm text-red-700">{placeBetError}</p>
         )}
 
         {betMutation.isSuccess && (
-          <p className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
+          <p className="mt-3 border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
             Ставка успешно размещена: {betMutation.data.id}
           </p>
         )}
@@ -276,14 +276,14 @@ export function EventDetails({ eventId }: EventDetailsProps) {
       </section>
 
       {isCreator && (
-        <section className="rounded-2xl border border-[color:var(--muted-border)] bg-[var(--cool-surface)] p-4">
-          <h3 className="text-lg font-semibold text-slate-900">Запрос на завершение события</h3>
+        <section className="border border-[color:var(--muted-border)] bg-[#f8fafc] p-4">
+          <h3 className="text-lg font-semibold text-slate-800">Запрос на завершение события</h3>
           <p className="mt-1 text-sm text-slate-600">
             Создатель события отправляет доказательство (ссылка или файл), после чего админ выбирает исход и закрывает событие с выплатами.
           </p>
 
           {!canRequestSettlement && (
-            <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            <p className="mt-3 border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
               Запрос на завершение доступен только в статусе <b>approved</b>.
             </p>
           )}
@@ -328,7 +328,7 @@ export function EventDetails({ eventId }: EventDetailsProps) {
           </div>
 
           {settlementRequestMutation.isError && (
-            <p className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            <p className="mt-3 border border-red-200 bg-red-50 p-3 text-sm text-red-700">
               {settlementRequestMutation.error instanceof ApiError
                 ? settlementRequestMutation.error.message
                 : "Не удалось отправить запрос на завершение"}
@@ -336,7 +336,7 @@ export function EventDetails({ eventId }: EventDetailsProps) {
           )}
 
           {settlementRequestMutation.isSuccess && (
-            <p className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
+            <p className="mt-3 border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
               Запрос на завершение отправлен администратору.
             </p>
           )}
@@ -353,7 +353,7 @@ export function EventDetails({ eventId }: EventDetailsProps) {
       )}
 
       {canModerate && (
-        <section className="rounded-2xl border border-[color:var(--muted-border)] bg-[var(--cool-surface)] p-4 text-sm text-slate-700">
+        <section className="border border-[color:var(--muted-border)] bg-[#f8fafc] p-4 text-sm text-slate-600">
           Для действий модерации используйте вкладку <Link href="/moderation">«Модерация»</Link>.
         </section>
       )}

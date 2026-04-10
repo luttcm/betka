@@ -36,12 +36,12 @@ export default function MyBetsPage() {
   return (
     <section className="space-y-6">
       <div className="panel-dark">
+        <p className="text-xs uppercase tracking-[0.2em] text-[var(--brand-accent)]">Bet History</p>
         <h2 className="text-4xl font-medium leading-[1.05] md:text-5xl">Мои ставки</h2>
-        <p className="mt-3 text-sm text-white/75 md:text-base">Список ставок с сортировкой по времени и фильтром по статусу.</p>
+        <p className="mt-3 text-sm text-slate-600 md:text-base">Список ставок с сортировкой по времени и фильтром по статусу.</p>
       </div>
 
       <MyBetsList items={betsQuery.data} />
     </section>
   );
 }
-

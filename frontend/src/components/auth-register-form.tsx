@@ -51,7 +51,7 @@ export function AuthRegisterForm() {
           placeholder="user@example.com"
           {...formRegister("email")}
         />
-        {errors.email && <p className="text-sm text-red-600">{errors.email.message}</p>}
+        {errors.email && <p className="text-sm text-red-700">{errors.email.message}</p>}
       </div>
 
       <div className="grid gap-1">
@@ -65,17 +65,17 @@ export function AuthRegisterForm() {
           placeholder="Минимум 6 символов"
           {...formRegister("password")}
         />
-        {errors.password && <p className="text-sm text-red-600">{errors.password.message}</p>}
+        {errors.password && <p className="text-sm text-red-700">{errors.password.message}</p>}
       </div>
 
       {mutation.isError && (
-        <p className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+        <p className="border border-red-200 bg-red-50 p-3 text-sm text-red-700">
           {mutation.error instanceof ApiError ? mutation.error.message : "Ошибка регистрации"}
         </p>
       )}
 
       {mutation.isSuccess && (
-        <div className="space-y-2 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+        <div className="space-y-2 border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
           <p>Регистрация успешна. Подтвердите email по ссылке из письма/логов API.</p>
           <p>
             После подтверждения перейдите на <Link href="/auth/login">страницу входа</Link>.

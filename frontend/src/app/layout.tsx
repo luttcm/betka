@@ -20,25 +20,28 @@ export default function RootLayout({
     <html lang="ru">
       <body>
         <Providers>
-          <main className="app-shell">
-            <header className="mb-8 rounded-[32px] bg-[var(--near-black)] p-6 text-white md:p-8">
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div>
-                  <p className="text-sm text-white/70">Bet MVP</p>
-                  <h1 className="text-3xl font-medium leading-tight md:text-4xl">Пользовательские события</h1>
-                </div>
-                <div className="flex flex-col items-start gap-3 text-sm md:items-end">
-                  <nav className="flex flex-wrap items-center gap-2">
-                    <Link href="/" className="btn-secondary !rounded-full !px-4 !py-2 !text-xs">
-                      Каталог
-                    </Link>
-                    <Link href="/events/new" className="btn-secondary !rounded-full !px-4 !py-2 !text-xs">
-                      Создать событие
-                    </Link>
-                  </nav>
-                  <AuthNav />
-                </div>
+          <header className="border-b border-[color:var(--muted-border)] bg-[#4a76a8] text-white">
+            <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-4 py-3 md:px-6">
+              <div className="flex items-center gap-4">
+                <Link href="/" className="text-sm font-semibold text-white hover:text-white/90">
+                  ДОДЕП (Аренда 60-54-04)
+                </Link>
+                <nav className="flex items-center gap-2">
+                  <Link href="/" className="rounded-md bg-white/15 px-3 py-1.5 text-sm text-white hover:bg-white/15">
+                    Каталог
+                  </Link>
+                  <Link href="/events/new" className="rounded-md px-3 py-1.5 text-sm text-white/90 hover:bg-white/15 hover:text-white">
+                    Создать событие
+                  </Link>
+                </nav>
               </div>
+              <AuthNav />
+            </div>
+          </header>
+
+          <main className="app-shell">
+            <header className="mb-6">
+              <h1 className="text-3xl font-semibold leading-tight text-[#2c2d2e] md:text-4xl">Линия пользовательских событий</h1>
             </header>
 
             {children}
