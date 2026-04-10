@@ -289,6 +289,199 @@ func (s *Service) SettleEventBets(eventID, winnerOutcome string) ([]Bet, error) 
 	return updated, nil
 }
 
+func (s *Service) SettleEventAndBets(eventID, winnerOutcome string) (events.Event, []Bet, error) {
+	eventID = strings.TrimSpace(eventID)
+	winnerOutcome = strings.ToLower(strings.TrimSpace(winnerOutcome))
+
+	if eventID == "" || (winnerOutcome != "yes" && winnerOutcome != "no") {
+		return events.Event{}, nil, ErrInvalidSettlement
+	}
+
+	if s.db == nil {
+		evt, err := s.eventsService.SettleEvent(eventID, winnerOutcome)
+		if err != nil {
+			return events.Event{}, nil, err
+		}
+
+		updated, err := s.SettleEventBets(eventID, winnerOutcome)
+		if err != nil {
+			return events.Event{}, nil, err
+		}
+
+		return evt, updated, nil
+	}
+
+	return s.settleEventAndBetsDB(eventID, winnerOutcome)
+}
+
+func (s *Service) settleEventAndBetsDB(eventID, winnerOutcome string) (events.Event, []Bet, error) {
+	eid, err := strconv.ParseInt(strings.TrimSpace(eventID), 10, 64)
+	if err != nil {
+		return events.Event{}, nil, events.ErrInvalidSettlementInput
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return events.Event{}, nil, err
+	}
+	defer tx.Rollback()
+
+	var (
+		creatorID, settlementRequestedBy int64
+		settlementRequestedAt            sql.NullTime
+		evt                              events.Event
+	)
+	err = tx.QueryRow(
+		`UPDATE events
+		 SET status = 'settled', winner_outcome = $2
+		 WHERE id = $1 AND status = 'settlement_requested'
+		 RETURNING id, creator_user_id, title, description, category, resolve_at, status,
+		        COALESCE(winner_outcome, ''),
+		        COALESCE(settlement_requested_by, 0), settlement_requested_at,
+		        COALESCE(settlement_evidence_url, ''), COALESCE(settlement_evidence_file_name, ''), COALESCE(settlement_evidence_file_data, ''),
+		        created_at`,
+		eid,
+		winnerOutcome,
+	).Scan(
+		&eid,
+		&creatorID,
+		&evt.Title,
+		&evt.Description,
+		&evt.Category,
+		&evt.ResolveAt,
+		&evt.Status,
+		&evt.WinnerOutcome,
+		&settlementRequestedBy,
+		&settlementRequestedAt,
+		&evt.SettlementEvidenceURL,
+		&evt.SettlementEvidenceFileName,
+		&evt.SettlementEvidenceFileData,
+		&evt.CreatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			var exists bool
+			if existsErr := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM events WHERE id = $1)`, eid).Scan(&exists); existsErr != nil {
+				return events.Event{}, nil, existsErr
+			}
+			if !exists {
+				return events.Event{}, nil, events.ErrEventNotFound
+			}
+			return events.Event{}, nil, events.ErrEventNotSettlable
+		}
+		return events.Event{}, nil, err
+	}
+
+	if _, err := tx.Exec(`UPDATE event_outcomes SET is_winner = CASE WHEN code = $2 THEN TRUE ELSE FALSE END WHERE event_id = $1`, eid, winnerOutcome); err != nil {
+		return events.Event{}, nil, err
+	}
+
+	rows, err := tx.Query(
+		`SELECT b.id, b.user_id, b.event_id, eo.code, b.stake, b.odds_at_bet, b.potential_payout, b.status, b.idempotency_key, b.placed_at, b.settled_at
+		 FROM bets b
+		 JOIN event_outcomes eo ON eo.id = b.outcome_id
+		 WHERE b.event_id = $1 AND b.status = 'open'
+		 ORDER BY b.placed_at ASC
+		 FOR UPDATE`,
+		eid,
+	)
+	if err != nil {
+		return events.Event{}, nil, err
+	}
+	defer rows.Close()
+
+	updated := make([]Bet, 0)
+	for rows.Next() {
+		var (
+			bid, uid, eventIDValue int64
+			settledAt              sql.NullTime
+			b                      Bet
+		)
+
+		if err := rows.Scan(
+			&bid,
+			&uid,
+			&eventIDValue,
+			&b.OutcomeCode,
+			&b.Stake,
+			&b.OddsAtBet,
+			&b.PotentialPayout,
+			&b.Status,
+			&b.IdempotencyKey,
+			&b.PlacedAt,
+			&settledAt,
+		); err != nil {
+			continue
+		}
+
+		status := "lost"
+		if b.OutcomeCode == winnerOutcome {
+			status = "won"
+
+			var (
+				walletID int64
+				balance  float64
+			)
+			if err := tx.QueryRow(`SELECT id, balance_tokens FROM wallets WHERE user_id = $1 FOR UPDATE`, uid).Scan(&walletID, &balance); err != nil {
+				return events.Event{}, nil, err
+			}
+
+			newBalance := balance + b.PotentialPayout
+			if _, err := tx.Exec(`UPDATE wallets SET balance_tokens = $1, updated_at = NOW() WHERE id = $2`, newBalance, walletID); err != nil {
+				return events.Event{}, nil, err
+			}
+
+			if _, err := tx.Exec(
+				`INSERT INTO wallet_transactions (wallet_id, type, amount_tokens, ref_type, ref_id, created_at)
+				 VALUES ($1, 'settle', $2, 'bet_settlement', $3, NOW())`,
+				walletID,
+				b.PotentialPayout,
+				bid,
+			); err != nil {
+				return events.Event{}, nil, err
+			}
+		}
+
+		if _, err := tx.Exec(`UPDATE bets SET status = $1, settled_at = NOW() WHERE id = $2`, status, bid); err != nil {
+			return events.Event{}, nil, err
+		}
+
+		now := time.Now().UTC()
+		b.ID = strconv.FormatInt(bid, 10)
+		b.UserID = strconv.FormatInt(uid, 10)
+		b.EventID = strconv.FormatInt(eventIDValue, 10)
+		b.Status = status
+		b.SettledAt = &now
+		updated = append(updated, b)
+	}
+
+	if _, err := tx.Exec(
+		`INSERT INTO audit_logs (action, entity_type, entity_id, payload_json, created_at)
+		 VALUES ('event_settled', 'event', $1, jsonb_build_object('winner_outcome', $2, 'settled_bets', $3), NOW())`,
+		eid,
+		winnerOutcome,
+		len(updated),
+	); err != nil {
+		return events.Event{}, nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return events.Event{}, nil, err
+	}
+
+	evt.ID = strconv.FormatInt(eid, 10)
+	evt.CreatorUserID = strconv.FormatInt(creatorID, 10)
+	if settlementRequestedBy > 0 {
+		evt.SettlementRequestedBy = strconv.FormatInt(settlementRequestedBy, 10)
+	}
+	if settlementRequestedAt.Valid {
+		t := settlementRequestedAt.Time
+		evt.SettlementRequestedAt = &t
+	}
+
+	return evt, updated, nil
+}
+
 func (s *Service) placeBetDB(userID, eventID, outcomeCode, idempotencyKey string, stake float64) (Bet, bool, error) {
 	e, ok := s.eventsService.GetEventByID(eventID)
 	if !ok || e.Status != "approved" || !e.ResolveAt.After(time.Now().UTC()) {
