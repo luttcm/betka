@@ -46,17 +46,17 @@ export function AuthVerifyForm() {
           placeholder="Токен из ссылки verify-email"
           {...register("token")}
         />
-        {errors.token && <p className="text-sm text-red-600">{errors.token.message}</p>}
+        {errors.token && <p className="text-sm text-red-700">{errors.token.message}</p>}
       </div>
 
       {mutation.isError && (
-        <p className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+        <p className="border border-red-200 bg-red-50 p-3 text-sm text-red-700">
           {mutation.error instanceof ApiError ? mutation.error.message : "Ошибка подтверждения"}
         </p>
       )}
 
       {mutation.isSuccess && (
-        <p className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
+        <p className="border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
           Email подтвержден. Теперь можно входить в аккаунт.
         </p>
       )}

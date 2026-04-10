@@ -68,7 +68,7 @@ export function ModerationEventsPanel() {
 
   if (!canModerate) {
     return (
-      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+      <div className="border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">
         Доступ к вкладке модерации есть только у moderator/admin.
       </div>
     );
@@ -106,13 +106,13 @@ export function ModerationEventsPanel() {
           <article key={event.id} className="panel space-y-4">
             <header className="space-y-2">
               <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-2xl font-semibold leading-tight">{event.title}</h3>
+                <h3 className="text-2xl font-semibold leading-tight text-slate-800">{event.title}</h3>
                 <span className="status-pill border-amber-200 bg-amber-50 text-amber-700">{event.status}</span>
               </div>
               <p className="text-sm text-slate-600">Категория: {event.category || "Без категории"}</p>
             </header>
 
-            <p className="text-sm text-slate-700">{event.description}</p>
+            <p className="text-sm text-slate-600">{event.description}</p>
 
             <div className="grid gap-2">
               <label htmlFor={`reject-${event.id}`} className="field-label">
@@ -151,12 +151,12 @@ export function ModerationEventsPanel() {
       })}
 
       {approveMutation.isError && (
-        <p className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+        <p className="border border-red-200 bg-red-50 p-4 text-sm text-red-700">
           {approveMutation.error instanceof ApiError ? approveMutation.error.message : "Не удалось одобрить событие"}
         </p>
       )}
       {rejectMutation.isError && (
-        <p className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+        <p className="border border-red-200 bg-red-50 p-4 text-sm text-red-700">
           {rejectMutation.error instanceof ApiError ? rejectMutation.error.message : "Не удалось отклонить событие"}
         </p>
       )}
@@ -164,7 +164,7 @@ export function ModerationEventsPanel() {
       {isAdmin && settlementRequests && settlementRequests.length > 0 && (
         <section className="panel space-y-4">
           <header className="space-y-2">
-            <h3 className="text-2xl font-semibold leading-tight">Запросы на завершение событий</h3>
+            <h3 className="text-2xl font-semibold leading-tight text-slate-800">Запросы на завершение событий</h3>
             <p className="text-sm text-slate-600">Создатели отправили доказательства, выберите итоговый исход и завершите событие.</p>
           </header>
 
@@ -172,25 +172,25 @@ export function ModerationEventsPanel() {
             {settlementRequests.map((event) => {
               const winner = winnerByEvent[event.id] ?? "yes";
               return (
-                <article key={event.id} className="rounded-xl border border-[color:var(--muted-border)] bg-white p-4 space-y-3">
+                <article key={event.id} className="border border-[color:var(--muted-border)] bg-[#f8fafc] p-4 space-y-3">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h4 className="text-lg font-semibold">{event.title}</h4>
+                    <h4 className="text-lg font-semibold text-slate-800">{event.title}</h4>
                     <span className="status-pill border-violet-200 bg-violet-50 text-violet-700">{event.status}</span>
                   </div>
 
-                  <p className="text-sm text-slate-700">{event.description}</p>
+                  <p className="text-sm text-slate-600">{event.description}</p>
 
                   {event.settlement_evidence_url && (
-                    <p className="text-sm text-slate-700">
+                    <p className="text-sm text-slate-600">
                       Доказательство (ссылка):{" "}
-                      <a href={event.settlement_evidence_url} target="_blank" rel="noreferrer" className="text-blue-700 underline">
+                      <a href={event.settlement_evidence_url} target="_blank" rel="noreferrer" className="text-[var(--brand-blue)] underline">
                         {event.settlement_evidence_url}
                       </a>
                     </p>
                   )}
 
                   {event.settlement_evidence_file_name && (
-                    <p className="text-sm text-slate-700">Доказательство (файл): {event.settlement_evidence_file_name}</p>
+                    <p className="text-sm text-slate-600">Доказательство (файл): {event.settlement_evidence_file_name}</p>
                   )}
 
                   <div className="flex flex-wrap items-center gap-2">
@@ -224,7 +224,7 @@ export function ModerationEventsPanel() {
       )}
 
       {settleMutation.isError && (
-        <p className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+        <p className="border border-red-200 bg-red-50 p-4 text-sm text-red-700">
           {settleMutation.error instanceof ApiError ? settleMutation.error.message : "Не удалось завершить событие"}
         </p>
       )}

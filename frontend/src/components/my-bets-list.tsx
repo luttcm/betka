@@ -47,6 +47,20 @@ export function MyBetsList({ items }: MyBetsListProps) {
     return sorted.filter((item) => item.status === statusFilter);
   }, [items, statusFilter]);
 
+  const columns: Array<{ key: "open" | "won" | "lost" | "refunded"; title: string }> = [
+    { key: "open", title: "Открытые" },
+    { key: "won", title: "Выиграли" },
+    { key: "lost", title: "Проиграли" },
+    { key: "refunded", title: "Возвраты" },
+  ];
+
+  const grouped = columns.map((column) => ({
+    ...column,
+    items: filtered.filter((bet) => bet.status === column.key),
+  }));
+
+  const gridColumns = statusFilter === "all" ? grouped : grouped.filter((column) => column.key === statusFilter);
+
   return (
     <section className="space-y-4">
       <div className="panel">
@@ -67,36 +81,47 @@ export function MyBetsList({ items }: MyBetsListProps) {
         </select>
       </div>
 
-      <div className="grid gap-3">
-        {filtered.map((bet) => (
-          <article key={bet.id} className="panel">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 className="text-lg font-semibold text-slate-900">Ставка {bet.id}</h3>
-              <span className="status-pill border-blue-200 bg-blue-50 text-blue-700">{bet.status}</span>
-            </div>
+      <div className="grid gap-3 lg:grid-cols-4">
+        {gridColumns.map((column) => (
+          <section key={column.key} className="panel space-y-3">
+            <header className="flex items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold text-slate-700">{column.title}</h3>
+              <span className="status-pill border-[color:var(--muted-border)] bg-[#f5f7fa] text-slate-600">{column.items.length}</span>
+            </header>
 
-            <dl className="mt-3 grid gap-1 text-sm text-slate-700">
-              <div>
-                <dt className="inline font-medium">Событие:</dt> <dd className="inline">{bet.event_id}</dd>
-              </div>
-              <div>
-                <dt className="inline font-medium">Исход:</dt> <dd className="inline">{bet.outcome_code}</dd>
-              </div>
-              <div>
-                <dt className="inline font-medium">Сумма:</dt> <dd className="inline">{formatAmount(bet.stake)} TOK</dd>
-              </div>
-              <div>
-                <dt className="inline font-medium">Потенциальная выплата:</dt>{" "}
-                <dd className="inline">{formatAmount(bet.potential_payout)} TOK</dd>
-              </div>
-              <div>
-                <dt className="inline font-medium">Размещена:</dt> <dd className="inline">{formatDate(bet.placed_at)}</dd>
-              </div>
-            </dl>
-          </article>
+            <div className="space-y-3">
+              {column.items.length === 0 && <p className="text-xs text-slate-500">Пусто</p>}
+
+              {column.items.map((bet) => (
+                <article key={bet.id} className="rounded-lg border border-[color:var(--muted-border)] bg-[#f8fafc] p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h4 className="text-sm font-semibold text-slate-800">Ставка {bet.id}</h4>
+                    <span className="status-pill border-[color:var(--muted-border)] bg-white text-slate-600">{bet.status}</span>
+                  </div>
+
+                  <dl className="mt-2 grid gap-1 text-xs text-slate-600">
+                    <div>
+                      <dt className="inline font-medium">Событие:</dt> <dd className="inline">{bet.event_id}</dd>
+                    </div>
+                    <div>
+                      <dt className="inline font-medium">Исход:</dt> <dd className="inline">{bet.outcome_code}</dd>
+                    </div>
+                    <div>
+                      <dt className="inline font-medium">Сумма:</dt> <dd className="inline">{formatAmount(bet.stake)} TOK</dd>
+                    </div>
+                    <div>
+                      <dt className="inline font-medium">Выплата:</dt> <dd className="inline">{formatAmount(bet.potential_payout)} TOK</dd>
+                    </div>
+                    <div>
+                      <dt className="inline font-medium">Дата:</dt> <dd className="inline">{formatDate(bet.placed_at)}</dd>
+                    </div>
+                  </dl>
+                </article>
+              ))}
+            </div>
+          </section>
         ))}
       </div>
     </section>
   );
 }
-

@@ -1,7 +1,9 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -16,7 +18,14 @@ const loginSchema = z.object({
 type LoginFormValues = z.infer<typeof loginSchema>;
 
 export function AuthLoginForm() {
-  const { signIn } = useAuth();
+  const { signIn, isAuthenticated } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.replace("/");
+    }
+  }, [isAuthenticated, router]);
 
   const {
     register,
@@ -34,6 +43,7 @@ export function AuthLoginForm() {
     mutationFn: login,
     onSuccess: (result, variables) => {
       signIn(result.access_token, variables.email);
+      router.replace("/");
     },
   });
 
@@ -54,7 +64,7 @@ export function AuthLoginForm() {
           placeholder="user@example.com"
           {...register("email")}
         />
-        {errors.email && <p className="text-sm text-red-600">{errors.email.message}</p>}
+        {errors.email && <p className="text-sm text-red-700">{errors.email.message}</p>}
       </div>
 
       <div className="grid gap-1">
@@ -67,17 +77,17 @@ export function AuthLoginForm() {
           className="text-input"
           {...register("password")}
         />
-        {errors.password && <p className="text-sm text-red-600">{errors.password.message}</p>}
+        {errors.password && <p className="text-sm text-red-700">{errors.password.message}</p>}
       </div>
 
       {mutation.isError && (
-        <p className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+        <p className="border border-red-200 bg-red-50 p-3 text-sm text-red-700">
           {mutation.error instanceof ApiError ? mutation.error.message : "Ошибка входа"}
         </p>
       )}
 
       {mutation.isSuccess && (
-        <p className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
+        <p className="border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
           Вход выполнен успешно.
         </p>
       )}

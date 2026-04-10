@@ -26,10 +26,9 @@ function formatDate(value: string): string {
 export function WalletBalanceCard({ wallet }: WalletBalanceCardProps) {
   return (
     <article className="panel">
-      <p className="text-sm text-slate-600">Текущий баланс</p>
-      <p className="mt-2 text-3xl font-semibold text-slate-900">{formatAmount(wallet.balance_tokens)} TOK</p>
+      <p className="text-xs uppercase tracking-[0.2em] text-[var(--brand-accent)]">Balance</p>
+      <p className="mt-2 text-3xl font-semibold text-slate-800">{formatAmount(wallet.balance_tokens)} TOK</p>
       <p className="mt-2 text-xs text-slate-500">Обновлено: {formatDate(wallet.updated_at)}</p>
     </article>
   );
 }
-

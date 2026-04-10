@@ -9,11 +9,11 @@ export function AuthNav() {
 
   if (!isAuthenticated) {
     return (
-      <div className="flex items-center gap-2">
-        <Link href="/auth/register" className="btn-secondary !rounded-full !px-4 !py-2 !text-xs">
+      <div className="flex items-center gap-3 text-sm">
+        <Link href="/auth/register" className="text-white/85 hover:text-white">
           Регистрация
         </Link>
-        <Link href="/auth/login" className="btn-primary !rounded-full !px-4 !py-2 !text-xs">
+        <Link href="/auth/login" className="rounded-md bg-white/15 px-3 py-1.5 text-white hover:bg-white/20">
           Вход
         </Link>
       </div>
@@ -21,26 +21,30 @@ export function AuthNav() {
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <Link href="/wallet" className="btn-secondary !rounded-full !px-4 !py-2 !text-xs">
+    <div className="flex flex-wrap items-center gap-3 text-sm">
+      <Link href="/wallet" className="text-white/90 hover:text-white">
         Кошелёк
       </Link>
-      <Link href="/bets/my" className="btn-secondary !rounded-full !px-4 !py-2 !text-xs">
+      <Link href="/bets/my" className="text-white/90 hover:text-white">
         Мои ставки
       </Link>
       {canModerate && (
-        <Link href="/moderation" className="btn-secondary !rounded-full !px-4 !py-2 !text-xs">
+        <Link href="/moderation" className="text-white/90 hover:text-white">
           Модерация
         </Link>
       )}
-      <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs text-emerald-700">
+      <span className="rounded-md bg-white/15 px-2.5 py-1 text-xs text-white/90">
         {email ?? "Авторизован"}
       </span>
-      {role && <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs text-white">{role}</span>}
+      {role && (
+        <span className="rounded-md bg-white/15 px-2.5 py-1 text-xs uppercase tracking-wide text-white/90">
+          {role}
+        </span>
+      )}
       <button
         type="button"
         onClick={signOut}
-        className="btn-secondary !rounded-full !px-4 !py-2 !text-xs"
+        className="text-white/90 hover:text-white"
       >
         Выйти
       </button>
