@@ -14,7 +14,11 @@ Frontend-часть MVP на Next.js + TypeScript.
 
 - Каталог событий: `GET /v1/events`
 - Карточка события: `GET /v1/events/:id`
+- Ставка из карточки события: `POST /v1/bets` + `Idempotency-Key`
 - Создание события: `POST /v1/events`
+- Кошелёк: `GET /v1/wallet`
+- Транзакции кошелька: `GET /v1/wallet/transactions`
+- Мои ставки: `GET /v1/bets/my`
 - Очередь модерации: `GET /v1/moderation/events`
 - Одобрение события модератором/админом: `POST /v1/moderation/events/:id/approve`
 - Отклонение события модератором/админом: `POST /v1/moderation/events/:id/reject`
@@ -27,7 +31,9 @@ Frontend-часть MVP на Next.js + TypeScript.
 - `/` — каталог
 - `/events/[id]` — карточка события
 - `/events/new` — создание события
-- `/moderation` — вкладка модерации (approve/reject)
+- `/wallet` — кошелёк и транзакции
+- `/bets/my` — мои ставки + фильтр статуса
+- `/moderation` — вкладка модерации (только `moderator/admin`)
 - `/auth/register` — регистрация
 - `/auth/login` — вход
 - `/auth/verify` — подтверждение email по токену
@@ -36,6 +42,7 @@ Frontend-часть MVP на Next.js + TypeScript.
 
 - Визуальная база приведена к стилистике из [`DESIGN.md`](../DESIGN.md): акцентный синий `#0052ff`, тёмные hero-блоки и pill-кнопки.
 - Общие UI-классы вынесены в [`globals.css`](src/app/globals.css): `btn-primary`, `btn-secondary`, `btn-danger`, `panel`, `panel-dark`, `text-input`.
+- Унифицированы состояния загрузки/ошибки/пустых данных через компонент `ui-states`.
 
 ## Локальный запуск
 
@@ -80,4 +87,6 @@ docker compose up --build
 
 - JWT хранится в `localStorage` после входа.
 - Для создания события нужен авторизованный пользователь.
+- Для ставок/кошелька/моих ставок требуется авторизация.
+- Раздел модерации виден и доступен только ролям `moderator/admin`.
 - Если SMTP не настроен, токен подтверждения email можно взять из логов API и вставить на страницу `/auth/verify`.

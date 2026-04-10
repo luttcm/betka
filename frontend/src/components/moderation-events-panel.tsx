@@ -9,6 +9,7 @@ import {
   getModerationEvents,
   rejectModerationEvent,
 } from "@/lib/api";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui-states";
 import { useAuth } from "@/lib/auth-context";
 
 export function ModerationEventsPanel() {
@@ -47,20 +48,16 @@ export function ModerationEventsPanel() {
   }
 
   if (isLoading) {
-    return <p className="panel">Загрузка очереди модерации...</p>;
+    return <LoadingState message="Загрузка очереди модерации..." />;
   }
 
   if (isError) {
     const message = error instanceof ApiError ? error.message : "Не удалось загрузить очередь модерации";
-    return <p className="rounded-2xl border border-red-200 bg-red-50 p-4 text-red-700">Ошибка: {message}</p>;
+    return <ErrorState message={message} />;
   }
 
   if (!data || data.length === 0) {
-    return (
-      <div className="panel">
-        <p className="text-slate-700">Событий на модерации сейчас нет.</p>
-      </div>
-    );
+    return <EmptyState message="Событий на модерации сейчас нет." />;
   }
 
   return (

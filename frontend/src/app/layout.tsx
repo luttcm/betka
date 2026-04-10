@@ -35,9 +35,6 @@ export default function RootLayout({
                     <Link href="/events/new" className="btn-secondary !rounded-full !px-4 !py-2 !text-xs">
                       Создать событие
                     </Link>
-                    <Link href="/moderation" className="btn-secondary !rounded-full !px-4 !py-2 !text-xs">
-                      Модерация
-                    </Link>
                   </nav>
                   <AuthNav />
                 </div>

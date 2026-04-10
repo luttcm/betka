@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 
 export function AuthNav() {
-  const { isAuthenticated, email, role, signOut } = useAuth();
+  const { isAuthenticated, email, role, canModerate, signOut } = useAuth();
 
   if (!isAuthenticated) {
     return (
@@ -22,6 +22,17 @@ export function AuthNav() {
 
   return (
     <div className="flex flex-wrap items-center gap-2">
+      <Link href="/wallet" className="btn-secondary !rounded-full !px-4 !py-2 !text-xs">
+        Кошелёк
+      </Link>
+      <Link href="/bets/my" className="btn-secondary !rounded-full !px-4 !py-2 !text-xs">
+        Мои ставки
+      </Link>
+      {canModerate && (
+        <Link href="/moderation" className="btn-secondary !rounded-full !px-4 !py-2 !text-xs">
+          Модерация
+        </Link>
+      )}
       <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs text-emerald-700">
         {email ?? "Авторизован"}
       </span>
