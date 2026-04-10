@@ -2,6 +2,7 @@ import {
   ApiErrorPayload,
   BetItem,
   CreateEventPayload,
+  EventOdds,
   EventItem,
   EventListResponse,
   LoginPayload,
@@ -10,6 +11,7 @@ import {
   ModerationEventsResponse,
   ModerationQueueItem,
   PlaceBetPayload,
+  RequestSettlementPayload,
   RegisterPayload,
   RegisterResponse,
   VerifyEmailResponse,
@@ -85,6 +87,18 @@ export async function getEventById(eventId: string): Promise<EventItem> {
   return parseResponse<EventItem>(response);
 }
 
+export async function getEventOdds(eventId: string): Promise<EventOdds> {
+  const response = await fetch(`${API_BASE_URL}/v1/events/${eventId}/odds`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    cache: "no-store",
+  });
+
+  return parseResponse<EventOdds>(response);
+}
+
 export async function createEvent(payload: CreateEventPayload, token: string): Promise<EventItem> {
   const response = await fetch(`${API_BASE_URL}/v1/events`, {
     method: "POST",
@@ -93,6 +107,40 @@ export async function createEvent(payload: CreateEventPayload, token: string): P
   });
 
   return parseResponse<EventItem>(response);
+}
+
+export async function requestSettlement(eventId: string, payload: RequestSettlementPayload, token: string): Promise<EventItem> {
+  const response = await fetch(`${API_BASE_URL}/v1/events/${eventId}/request-settlement`, {
+    method: "POST",
+    headers: withAuth(token),
+    body: JSON.stringify(payload),
+  });
+
+  return parseResponse<EventItem>(response);
+}
+
+export async function getAdminSettlementRequests(token: string): Promise<EventItem[]> {
+  const response = await fetch(`${API_BASE_URL}/v1/admin/events/settlement-requests`, {
+    method: "GET",
+    headers: withAuth(token),
+    cache: "no-store",
+  });
+
+  const payload = await parseResponse<EventListResponse>(response);
+  return payload.items;
+}
+
+export async function settleAdminEvent(eventId: string, winnerOutcome: "yes" | "no", token: string): Promise<{
+  event: EventItem;
+  settled_bets: BetItem[];
+}> {
+  const response = await fetch(`${API_BASE_URL}/v1/admin/events/${eventId}/settle`, {
+    method: "POST",
+    headers: withAuth(token),
+    body: JSON.stringify({ winner_outcome: winnerOutcome }),
+  });
+
+  return parseResponse<{ event: EventItem; settled_bets: BetItem[] }>(response);
 }
 
 export async function register(payload: RegisterPayload): Promise<RegisterResponse> {

@@ -12,24 +12,31 @@ import (
 )
 
 var (
-	ErrInvalidEventInput        = errors.New("invalid event input")
-	ErrEventNotFound            = errors.New("event not found")
-	ErrModerationAlreadyHandled = errors.New("moderation task already handled")
-	ErrInvalidModerationReason  = errors.New("invalid moderation reason")
-	ErrInvalidSettlementInput   = errors.New("invalid settlement input")
-	ErrEventNotSettlable        = errors.New("event is not settlable")
+	ErrInvalidEventInput          = errors.New("invalid event input")
+	ErrEventNotFound              = errors.New("event not found")
+	ErrModerationAlreadyHandled   = errors.New("moderation task already handled")
+	ErrInvalidModerationReason    = errors.New("invalid moderation reason")
+	ErrInvalidSettlementInput     = errors.New("invalid settlement input")
+	ErrEventNotSettlable          = errors.New("event is not settlable")
+	ErrForbiddenSettlementRequest = errors.New("forbidden settlement request")
+	ErrInvalidSettlementEvidence  = errors.New("invalid settlement evidence")
 )
 
 type Event struct {
-	ID            string    `json:"id"`
-	CreatorUserID string    `json:"creator_user_id"`
-	Title         string    `json:"title"`
-	Description   string    `json:"description"`
-	Category      string    `json:"category"`
-	ResolveAt     time.Time `json:"resolve_at"`
-	Status        string    `json:"status"`
-	WinnerOutcome string    `json:"winner_outcome,omitempty"`
-	CreatedAt     time.Time `json:"created_at"`
+	ID                         string     `json:"id"`
+	CreatorUserID              string     `json:"creator_user_id"`
+	Title                      string     `json:"title"`
+	Description                string     `json:"description"`
+	Category                   string     `json:"category"`
+	ResolveAt                  time.Time  `json:"resolve_at"`
+	Status                     string     `json:"status"`
+	WinnerOutcome              string     `json:"winner_outcome,omitempty"`
+	SettlementRequestedBy      string     `json:"settlement_requested_by,omitempty"`
+	SettlementRequestedAt      *time.Time `json:"settlement_requested_at,omitempty"`
+	SettlementEvidenceURL      string     `json:"settlement_evidence_url,omitempty"`
+	SettlementEvidenceFileName string     `json:"settlement_evidence_file_name,omitempty"`
+	SettlementEvidenceFileData string     `json:"settlement_evidence_file_data,omitempty"`
+	CreatedAt                  time.Time  `json:"created_at"`
 }
 
 type ModerationTask struct {
@@ -167,7 +174,11 @@ func (s *Service) CreateEvent(creatorUserID, title, description, category string
 func (s *Service) ListApprovedEvents() []Event {
 	if s.db != nil {
 		rows, err := s.db.Query(
-			`SELECT id, creator_user_id, title, description, category, resolve_at, status, COALESCE(winner_outcome, ''), created_at
+			`SELECT id, creator_user_id, title, description, category, resolve_at, status,
+			        COALESCE(winner_outcome, ''),
+			        COALESCE(settlement_requested_by, 0), settlement_requested_at,
+			        COALESCE(settlement_evidence_url, ''), COALESCE(settlement_evidence_file_name, ''), COALESCE(settlement_evidence_file_data, ''),
+			        created_at
 			 FROM events
 			 WHERE status = 'approved'
 			 ORDER BY created_at DESC`,
@@ -180,15 +191,38 @@ func (s *Service) ListApprovedEvents() []Event {
 		items := make([]Event, 0)
 		for rows.Next() {
 			var (
-				eid, creatorID int64
-				e              Event
+				eid, creatorID, settlementRequestedBy int64
+				settlementRequestedAt                 sql.NullTime
+				e                                     Event
 			)
-			if err := rows.Scan(&eid, &creatorID, &e.Title, &e.Description, &e.Category, &e.ResolveAt, &e.Status, &e.WinnerOutcome, &e.CreatedAt); err != nil {
+			if err := rows.Scan(
+				&eid,
+				&creatorID,
+				&e.Title,
+				&e.Description,
+				&e.Category,
+				&e.ResolveAt,
+				&e.Status,
+				&e.WinnerOutcome,
+				&settlementRequestedBy,
+				&settlementRequestedAt,
+				&e.SettlementEvidenceURL,
+				&e.SettlementEvidenceFileName,
+				&e.SettlementEvidenceFileData,
+				&e.CreatedAt,
+			); err != nil {
 				continue
 			}
 
 			e.ID = formatIntID(eid)
 			e.CreatorUserID = formatIntID(creatorID)
+			if settlementRequestedBy > 0 {
+				e.SettlementRequestedBy = formatIntID(settlementRequestedBy)
+			}
+			if settlementRequestedAt.Valid {
+				t := settlementRequestedAt.Time
+				e.SettlementRequestedAt = &t
+			}
 			items = append(items, e)
 		}
 
@@ -220,21 +254,48 @@ func (s *Service) GetEventByID(id string) (Event, bool) {
 		}
 
 		var (
-			eid, creatorID int64
-			e              Event
+			eid, creatorID, settlementRequestedBy int64
+			settlementRequestedAt                 sql.NullTime
+			e                                     Event
 		)
 		err = s.db.QueryRow(
-			`SELECT id, creator_user_id, title, description, category, resolve_at, status, COALESCE(winner_outcome, ''), created_at
+			`SELECT id, creator_user_id, title, description, category, resolve_at, status,
+			        COALESCE(winner_outcome, ''),
+			        COALESCE(settlement_requested_by, 0), settlement_requested_at,
+			        COALESCE(settlement_evidence_url, ''), COALESCE(settlement_evidence_file_name, ''), COALESCE(settlement_evidence_file_data, ''),
+			        created_at
 			 FROM events
 			 WHERE id = $1`,
 			eventID,
-		).Scan(&eid, &creatorID, &e.Title, &e.Description, &e.Category, &e.ResolveAt, &e.Status, &e.WinnerOutcome, &e.CreatedAt)
+		).Scan(
+			&eid,
+			&creatorID,
+			&e.Title,
+			&e.Description,
+			&e.Category,
+			&e.ResolveAt,
+			&e.Status,
+			&e.WinnerOutcome,
+			&settlementRequestedBy,
+			&settlementRequestedAt,
+			&e.SettlementEvidenceURL,
+			&e.SettlementEvidenceFileName,
+			&e.SettlementEvidenceFileData,
+			&e.CreatedAt,
+		)
 		if err != nil {
 			return Event{}, false
 		}
 
 		e.ID = formatIntID(eid)
 		e.CreatorUserID = formatIntID(creatorID)
+		if settlementRequestedBy > 0 {
+			e.SettlementRequestedBy = formatIntID(settlementRequestedBy)
+		}
+		if settlementRequestedAt.Valid {
+			t := settlementRequestedAt.Time
+			e.SettlementRequestedAt = &t
+		}
 		return e, true
 	}
 
@@ -272,6 +333,11 @@ func (s *Service) ListPendingModeration() []ModerationQueueItem {
 				e.resolve_at,
 				e.status,
 				COALESCE(e.winner_outcome, ''),
+				COALESCE(e.settlement_requested_by, 0),
+				e.settlement_requested_at,
+				COALESCE(e.settlement_evidence_url, ''),
+				COALESCE(e.settlement_evidence_file_name, ''),
+				COALESCE(e.settlement_evidence_file_data, ''),
 				e.created_at
 			 FROM moderation_tasks m
 			 JOIN events e ON e.id = m.event_id
@@ -286,10 +352,10 @@ func (s *Service) ListPendingModeration() []ModerationQueueItem {
 		items := make([]ModerationQueueItem, 0)
 		for rows.Next() {
 			var (
-				taskID, eventID, moderatorID, creatorID int64
-				reviewedAt                              sql.NullTime
-				task                                    ModerationTask
-				evt                                     Event
+				taskID, eventID, moderatorID, creatorID, settlementRequestedBy int64
+				reviewedAt, settlementRequestedAt                              sql.NullTime
+				task                                                           ModerationTask
+				evt                                                            Event
 			)
 
 			if err := rows.Scan(
@@ -307,6 +373,11 @@ func (s *Service) ListPendingModeration() []ModerationQueueItem {
 				&evt.ResolveAt,
 				&evt.Status,
 				&evt.WinnerOutcome,
+				&settlementRequestedBy,
+				&settlementRequestedAt,
+				&evt.SettlementEvidenceURL,
+				&evt.SettlementEvidenceFileName,
+				&evt.SettlementEvidenceFileData,
 				&evt.CreatedAt,
 			); err != nil {
 				continue
@@ -324,6 +395,13 @@ func (s *Service) ListPendingModeration() []ModerationQueueItem {
 
 			evt.ID = formatIntID(eventID)
 			evt.CreatorUserID = formatIntID(creatorID)
+			if settlementRequestedBy > 0 {
+				evt.SettlementRequestedBy = formatIntID(settlementRequestedBy)
+			}
+			if settlementRequestedAt.Valid {
+				t := settlementRequestedAt.Time
+				evt.SettlementRequestedAt = &t
+			}
 
 			items = append(items, ModerationQueueItem{Task: task, Event: evt})
 		}
@@ -479,17 +557,37 @@ func (s *Service) SettleEvent(eventID, winnerOutcome string) (Event, error) {
 		}
 
 		var (
-			creatorID int64
-			event     Event
+			creatorID, settlementRequestedBy int64
+			settlementRequestedAt            sql.NullTime
+			event                            Event
 		)
 		err = s.db.QueryRow(
 			`UPDATE events
 			 SET status = 'settled', winner_outcome = $2
-			 WHERE id = $1 AND status = 'approved'
-			 RETURNING id, creator_user_id, title, description, category, resolve_at, status, COALESCE(winner_outcome, ''), created_at`,
+			 WHERE id = $1 AND status = 'settlement_requested'
+			 RETURNING id, creator_user_id, title, description, category, resolve_at, status,
+			        COALESCE(winner_outcome, ''),
+			        COALESCE(settlement_requested_by, 0), settlement_requested_at,
+			        COALESCE(settlement_evidence_url, ''), COALESCE(settlement_evidence_file_name, ''), COALESCE(settlement_evidence_file_data, ''),
+			        created_at`,
 			eid,
 			winnerOutcome,
-		).Scan(&eid, &creatorID, &event.Title, &event.Description, &event.Category, &event.ResolveAt, &event.Status, &event.WinnerOutcome, &event.CreatedAt)
+		).Scan(
+			&eid,
+			&creatorID,
+			&event.Title,
+			&event.Description,
+			&event.Category,
+			&event.ResolveAt,
+			&event.Status,
+			&event.WinnerOutcome,
+			&settlementRequestedBy,
+			&settlementRequestedAt,
+			&event.SettlementEvidenceURL,
+			&event.SettlementEvidenceFileName,
+			&event.SettlementEvidenceFileData,
+			&event.CreatedAt,
+		)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				if _, ok := s.GetEventByID(eventID); !ok {
@@ -502,6 +600,13 @@ func (s *Service) SettleEvent(eventID, winnerOutcome string) (Event, error) {
 
 		event.ID = formatIntID(eid)
 		event.CreatorUserID = formatIntID(creatorID)
+		if settlementRequestedBy > 0 {
+			event.SettlementRequestedBy = formatIntID(settlementRequestedBy)
+		}
+		if settlementRequestedAt.Valid {
+			t := settlementRequestedAt.Time
+			event.SettlementRequestedAt = &t
+		}
 		return event, nil
 	}
 
@@ -513,7 +618,7 @@ func (s *Service) SettleEvent(eventID, winnerOutcome string) (Event, error) {
 		return Event{}, ErrEventNotFound
 	}
 
-	if e.Status != "approved" {
+	if e.Status != "settlement_requested" {
 		return Event{}, ErrEventNotSettlable
 	}
 
@@ -521,6 +626,188 @@ func (s *Service) SettleEvent(eventID, winnerOutcome string) (Event, error) {
 	e.WinnerOutcome = winnerOutcome
 
 	return *e, nil
+}
+
+func (s *Service) RequestSettlement(eventID, requesterUserID, evidenceURL, evidenceFileName, evidenceFileData string) (Event, error) {
+	eventID = strings.TrimSpace(eventID)
+	requesterUserID = strings.TrimSpace(requesterUserID)
+	evidenceURL = strings.TrimSpace(evidenceURL)
+	evidenceFileName = strings.TrimSpace(evidenceFileName)
+	evidenceFileData = strings.TrimSpace(evidenceFileData)
+
+	if eventID == "" || requesterUserID == "" {
+		return Event{}, ErrInvalidSettlementInput
+	}
+
+	if evidenceURL == "" && (evidenceFileName == "" || evidenceFileData == "") {
+		return Event{}, ErrInvalidSettlementEvidence
+	}
+
+	if s.db != nil {
+		eid, err := parseIntID(eventID)
+		if err != nil {
+			return Event{}, ErrEventNotFound
+		}
+
+		rid, err := parseIntID(requesterUserID)
+		if err != nil {
+			return Event{}, ErrInvalidSettlementInput
+		}
+
+		var (
+			creatorID int64
+			status    string
+		)
+		if err := s.db.QueryRow(`SELECT creator_user_id, status FROM events WHERE id = $1`, eid).Scan(&creatorID, &status); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return Event{}, ErrEventNotFound
+			}
+			return Event{}, err
+		}
+
+		if creatorID != rid {
+			return Event{}, ErrForbiddenSettlementRequest
+		}
+
+		if status != "approved" {
+			return Event{}, ErrEventNotSettlable
+		}
+
+		if _, err := s.db.Exec(
+			`UPDATE events
+			 SET status = 'settlement_requested',
+			     settlement_requested_by = $2,
+			     settlement_requested_at = NOW(),
+			     settlement_evidence_url = NULLIF($3, ''),
+			     settlement_evidence_file_name = NULLIF($4, ''),
+			     settlement_evidence_file_data = NULLIF($5, '')
+			 WHERE id = $1`,
+			eid,
+			rid,
+			evidenceURL,
+			evidenceFileName,
+			evidenceFileData,
+		); err != nil {
+			return Event{}, err
+		}
+
+		updated, ok := s.GetEventByID(eventID)
+		if !ok {
+			return Event{}, ErrEventNotFound
+		}
+
+		return updated, nil
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	e, ok := s.eventsByID[eventID]
+	if !ok {
+		return Event{}, ErrEventNotFound
+	}
+
+	if e.CreatorUserID != requesterUserID {
+		return Event{}, ErrForbiddenSettlementRequest
+	}
+
+	if e.Status != "approved" {
+		return Event{}, ErrEventNotSettlable
+	}
+
+	now := time.Now().UTC()
+	e.Status = "settlement_requested"
+	e.SettlementRequestedBy = requesterUserID
+	e.SettlementRequestedAt = &now
+	e.SettlementEvidenceURL = evidenceURL
+	e.SettlementEvidenceFileName = evidenceFileName
+	e.SettlementEvidenceFileData = evidenceFileData
+
+	return *e, nil
+}
+
+func (s *Service) ListSettlementRequests() []Event {
+	if s.db != nil {
+		rows, err := s.db.Query(
+			`SELECT id, creator_user_id, title, description, category, resolve_at, status,
+			        COALESCE(winner_outcome, ''),
+			        COALESCE(settlement_requested_by, 0), settlement_requested_at,
+			        COALESCE(settlement_evidence_url, ''), COALESCE(settlement_evidence_file_name, ''), COALESCE(settlement_evidence_file_data, ''),
+			        created_at
+			 FROM events
+			 WHERE status = 'settlement_requested'
+			 ORDER BY settlement_requested_at DESC NULLS LAST`,
+		)
+		if err != nil {
+			return []Event{}
+		}
+		defer rows.Close()
+
+		items := make([]Event, 0)
+		for rows.Next() {
+			var (
+				eid, creatorID, settlementRequestedBy int64
+				settlementRequestedAt                 sql.NullTime
+				e                                     Event
+			)
+			if err := rows.Scan(
+				&eid,
+				&creatorID,
+				&e.Title,
+				&e.Description,
+				&e.Category,
+				&e.ResolveAt,
+				&e.Status,
+				&e.WinnerOutcome,
+				&settlementRequestedBy,
+				&settlementRequestedAt,
+				&e.SettlementEvidenceURL,
+				&e.SettlementEvidenceFileName,
+				&e.SettlementEvidenceFileData,
+				&e.CreatedAt,
+			); err != nil {
+				continue
+			}
+
+			e.ID = formatIntID(eid)
+			e.CreatorUserID = formatIntID(creatorID)
+			if settlementRequestedBy > 0 {
+				e.SettlementRequestedBy = formatIntID(settlementRequestedBy)
+			}
+			if settlementRequestedAt.Valid {
+				t := settlementRequestedAt.Time
+				e.SettlementRequestedAt = &t
+			}
+
+			items = append(items, e)
+		}
+
+		return items
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	items := make([]Event, 0)
+	for _, e := range s.eventsByID {
+		if e.Status == "settlement_requested" {
+			items = append(items, *e)
+		}
+	}
+
+	sort.Slice(items, func(i, j int) bool {
+		iAt := items[i].SettlementRequestedAt
+		jAt := items[j].SettlementRequestedAt
+		if iAt == nil {
+			return false
+		}
+		if jAt == nil {
+			return true
+		}
+		return iAt.After(*jAt)
+	})
+
+	return items
 }
 
 func parseIntID(raw string) (int64, error) {

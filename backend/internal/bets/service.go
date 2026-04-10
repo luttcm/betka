@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -34,6 +35,19 @@ type Bet struct {
 	PlacedAt        time.Time  `json:"placed_at"`
 	SettledAt       *time.Time `json:"settled_at,omitempty"`
 }
+
+type EventOdds struct {
+	EventID   string             `json:"event_id"`
+	Odds      map[string]float64 `json:"odds"`
+	MarginBps int                `json:"margin_bps"`
+}
+
+const (
+	defaultMarginBps = 500
+	defaultLiquidity = 100.0
+	minOddsValue     = 1.01
+	maxOddsValue     = 100.0
+)
 
 type Service struct {
 	db            *sql.DB
@@ -111,7 +125,11 @@ func (s *Service) PlaceBet(userID, eventID, outcomeCode, idempotencyKey string, 
 		return Bet{}, false, err
 	}
 
-	odds := 2.0
+	oddsView, err := s.currentEventOddsLocked(eventID)
+	if err != nil {
+		return Bet{}, false, err
+	}
+	odds := oddsView.Odds[outcomeCode]
 	b := &Bet{
 		ID:              betID,
 		UserID:          userID,
@@ -213,6 +231,22 @@ func (s *Service) ListMyBets(userID string) ([]Bet, error) {
 	return items, nil
 }
 
+func (s *Service) GetEventOdds(eventID string) (EventOdds, error) {
+	eventID = strings.TrimSpace(eventID)
+	if eventID == "" {
+		return EventOdds{}, ErrInvalidBetInput
+	}
+
+	if s.db != nil {
+		return s.currentEventOddsDB(eventID)
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return s.currentEventOddsLocked(eventID)
+}
+
 func (s *Service) SettleEventBets(eventID, winnerOutcome string) ([]Bet, error) {
 	eventID = strings.TrimSpace(eventID)
 	winnerOutcome = strings.ToLower(strings.TrimSpace(winnerOutcome))
@@ -290,7 +324,11 @@ func (s *Service) placeBetDB(userID, eventID, outcomeCode, idempotencyKey string
 		return Bet{}, false, err
 	}
 
-	odds := 2.0
+	oddsView, err := s.currentEventOddsDB(eventID)
+	if err != nil {
+		return Bet{}, false, err
+	}
+	odds := oddsView.Odds[outcomeCode]
 	var (
 		outcomeID int64
 		betID     int64
@@ -325,6 +363,24 @@ func (s *Service) placeBetDB(userID, eventID, outcomeCode, idempotencyKey string
 			}
 		}
 		return Bet{}, false, err
+	}
+
+	postOdds, oddsErr := s.currentEventOddsDB(eventID)
+	if oddsErr == nil {
+		for code, value := range postOdds.Odds {
+			if _, err := s.db.Exec(
+				`INSERT INTO odds_snapshots (event_id, outcome_id, odds_decimal, margin_bps, created_at)
+				 SELECT $1, eo.id, $3, $4, NOW()
+				 FROM event_outcomes eo
+				 WHERE eo.event_id = $1 AND eo.code = $2`,
+				eid,
+				code,
+				value,
+				defaultMarginBps,
+			); err != nil {
+				break
+			}
+		}
 	}
 
 	return Bet{
@@ -406,4 +462,105 @@ func (s *Service) settleEventBetsDB(eventID, winnerOutcome string) ([]Bet, error
 	}
 
 	return updated, nil
+}
+
+func (s *Service) currentEventOddsLocked(eventID string) (EventOdds, error) {
+	totalYes := 0.0
+	totalNo := 0.0
+	for _, b := range s.betsByID {
+		if b.EventID != eventID || b.Status != "open" {
+			continue
+		}
+		switch b.OutcomeCode {
+		case "yes":
+			totalYes += b.Stake
+		case "no":
+			totalNo += b.Stake
+		}
+	}
+
+	yesOdds, noOdds := calculateDynamicOdds(totalYes, totalNo, defaultMarginBps)
+	return EventOdds{
+		EventID: eventID,
+		Odds: map[string]float64{
+			"yes": yesOdds,
+			"no":  noOdds,
+		},
+		MarginBps: defaultMarginBps,
+	}, nil
+}
+
+func (s *Service) currentEventOddsDB(eventID string) (EventOdds, error) {
+	eid, err := strconv.ParseInt(strings.TrimSpace(eventID), 10, 64)
+	if err != nil {
+		return EventOdds{}, ErrInvalidBetInput
+	}
+
+	rows, err := s.db.Query(
+		`SELECT eo.code, COALESCE(SUM(b.stake), 0)
+		 FROM event_outcomes eo
+		 LEFT JOIN bets b ON b.outcome_id = eo.id AND b.status = 'open'
+		 WHERE eo.event_id = $1
+		 GROUP BY eo.code`,
+		eid,
+	)
+	if err != nil {
+		return EventOdds{}, err
+	}
+	defer rows.Close()
+
+	totalYes := 0.0
+	totalNo := 0.0
+	for rows.Next() {
+		var (
+			code  string
+			stake float64
+		)
+		if err := rows.Scan(&code, &stake); err != nil {
+			continue
+		}
+
+		switch strings.ToLower(strings.TrimSpace(code)) {
+		case "yes":
+			totalYes = stake
+		case "no":
+			totalNo = stake
+		}
+	}
+
+	yesOdds, noOdds := calculateDynamicOdds(totalYes, totalNo, defaultMarginBps)
+	return EventOdds{
+		EventID: eventID,
+		Odds: map[string]float64{
+			"yes": yesOdds,
+			"no":  noOdds,
+		},
+		MarginBps: defaultMarginBps,
+	}, nil
+}
+
+func calculateDynamicOdds(totalYes, totalNo float64, marginBps int) (float64, float64) {
+	if marginBps < 0 {
+		marginBps = 0
+	}
+
+	margin := float64(marginBps) / 10000.0
+	denominator := totalYes + totalNo + (2 * defaultLiquidity)
+	pYes := (totalYes + defaultLiquidity) / denominator
+	pNo := (totalNo + defaultLiquidity) / denominator
+
+	oddsYes := (1.0 - margin) / pYes
+	oddsNo := (1.0 - margin) / pNo
+
+	return normalizeOdds(oddsYes), normalizeOdds(oddsNo)
+}
+
+func normalizeOdds(value float64) float64 {
+	if value < minOddsValue {
+		value = minOddsValue
+	}
+	if value > maxOddsValue {
+		value = maxOddsValue
+	}
+	return math.Round(value*10000) / 10000
 }

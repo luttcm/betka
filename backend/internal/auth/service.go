@@ -140,6 +140,10 @@ func (s *Service) Login(email, password string) (User, error) {
 			return User{}, ErrInvalidCredentials
 		}
 
+		if !emailVerified {
+			return User{}, ErrEmailNotVerified
+		}
+
 		return User{
 			ID:            formatIntID(id),
 			Email:         dbEmail,
@@ -159,6 +163,10 @@ func (s *Service) Login(email, password string) (User, error) {
 
 	if u.PasswordHash != hashPassword(password) {
 		return User{}, ErrInvalidCredentials
+	}
+
+	if !u.EmailVerified {
+		return User{}, ErrEmailNotVerified
 	}
 
 	return *u, nil
