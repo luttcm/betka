@@ -72,7 +72,9 @@
 
 - `GET /v1/events` — публичный список только `approved` событий
 - `GET /v1/events/:id` — публичная карточка только `approved` события
+- `GET /v1/events/:id/odds` — текущие динамические коэффициенты для события
 - `POST /v1/events` — создание события авторизованным пользователем (`Bearer`)
+- `POST /v1/events/:id/request-settlement` — запрос на завершение события его создателем (с доказательством)
 
 Пример `POST /v1/events` request:
 
@@ -104,6 +106,29 @@
 
 - Новое событие создаётся в статусе `pending`.
 - Пока событие не одобрено модерацией, оно не попадает в `GET /v1/events` и `GET /v1/events/:id`.
+- Коэффициенты рассчитываются динамически из пула открытых ставок по исходам `yes/no` с маржой платформы.
+- Для завершения события создатель переводит событие в `settlement_requested`, передавая `evidence_url` или файл (`evidence_file.file_name` + `evidence_file.file_data`).
+
+Пример `GET /v1/events/:id/odds` response:
+
+```json
+{
+  "event_id": "1",
+  "odds": {
+    "yes": 1.9000,
+    "no": 1.9000
+  },
+  "margin_bps": 500
+}
+```
+
+Пример `POST /v1/events/:id/request-settlement` request:
+
+```json
+{
+  "evidence_url": "https://example.com/proof"
+}
+```
 
 ## RBAC (минимальный каркас)
 
@@ -113,6 +138,19 @@
 - `POST /v1/moderation/events/:id/reject` доступен только ролям `moderator` и `admin`, требует JSON body с полем `reason`.
 - Для роли `user` endpoint возвращает `403 Forbidden`.
 - Для невалидного/отсутствующего Bearer token endpoint'ы под auth middleware возвращают `401 Unauthorized`.
+
+## Admin / Settlement
+
+- `GET /v1/admin/events/settlement-requests` — список событий в статусе `settlement_requested` (только `admin`)
+- `POST /v1/admin/events/:id/settle` — финализация события по исходу `winner_outcome` (`yes|no`, только `admin`)
+
+Пример `POST /v1/admin/events/:id/settle` request:
+
+```json
+{
+  "winner_outcome": "yes"
+}
+```
 
 Пример `POST /v1/moderation/events/:id/reject` request:
 

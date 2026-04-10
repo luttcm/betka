@@ -1,4 +1,4 @@
-export type EventStatus = "pending" | "approved" | "rejected" | "settled";
+export type EventStatus = "pending" | "approved" | "settlement_requested" | "rejected" | "settled";
 export type UserRole = "user" | "moderator" | "admin";
 
 export interface EventItem {
@@ -10,6 +10,11 @@ export interface EventItem {
   resolve_at: string;
   status: EventStatus;
   winner_outcome?: "yes" | "no";
+  settlement_requested_by?: string;
+  settlement_requested_at?: string;
+  settlement_evidence_url?: string;
+  settlement_evidence_file_name?: string;
+  settlement_evidence_file_data?: string;
   created_at: string;
 }
 
@@ -91,6 +96,23 @@ export interface PlaceBetPayload {
   event_id: string;
   outcome_code: "yes" | "no";
   stake: number;
+}
+
+export interface EventOdds {
+  event_id: string;
+  odds: {
+    yes: number;
+    no: number;
+  };
+  margin_bps: number;
+}
+
+export interface RequestSettlementPayload {
+  evidence_url?: string;
+  evidence_file?: {
+    file_name: string;
+    file_data: string;
+  };
 }
 
 export interface RegisterPayload {

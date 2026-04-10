@@ -35,12 +35,27 @@ func (h *EventsHandler) ListEvents(c *gin.Context) {
 
 func (h *EventsHandler) GetEvent(c *gin.Context) {
 	e, ok := h.service.GetEventByID(c.Param("id"))
-	if !ok || e.Status != "approved" {
+	if !ok || (e.Status != "approved" && e.Status != "settlement_requested" && e.Status != "settled") {
 		c.JSON(http.StatusNotFound, gin.H{"error": "event not found"})
 		return
 	}
 
 	c.JSON(http.StatusOK, e)
+}
+
+func (h *EventsHandler) GetEventOdds(c *gin.Context) {
+	odds, err := h.betsService.GetEventOdds(c.Param("id"))
+	if err != nil {
+		if errors.Is(err, bets.ErrInvalidBetInput) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid event id"})
+			return
+		}
+
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch event odds"})
+		return
+	}
+
+	c.JSON(http.StatusOK, odds)
 }
 
 func (h *EventsHandler) CreateEvent(c *gin.Context) {
@@ -140,6 +155,59 @@ func (h *EventsHandler) RejectEvent(c *gin.Context) {
 
 type settleEventRequest struct {
 	WinnerOutcome string `json:"winner_outcome"`
+}
+
+type requestSettlementEvidenceFile struct {
+	FileName string `json:"file_name"`
+	FileData string `json:"file_data"`
+}
+
+type requestSettlementRequest struct {
+	EvidenceURL  string                        `json:"evidence_url"`
+	EvidenceFile requestSettlementEvidenceFile `json:"evidence_file"`
+}
+
+func (h *EventsHandler) RequestSettlement(c *gin.Context) {
+	claims, ok := middleware.ClaimsFromContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	var req requestSettlementRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	e, err := h.service.RequestSettlement(
+		c.Param("id"),
+		claims.Subject,
+		req.EvidenceURL,
+		req.EvidenceFile.FileName,
+		req.EvidenceFile.FileData,
+	)
+	if err != nil {
+		switch {
+		case errors.Is(err, events.ErrEventNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": "event not found"})
+		case errors.Is(err, events.ErrForbiddenSettlementRequest):
+			c.JSON(http.StatusForbidden, gin.H{"error": "only event creator can request settlement"})
+		case errors.Is(err, events.ErrInvalidSettlementEvidence):
+			c.JSON(http.StatusBadRequest, gin.H{"error": "evidence url or evidence file (name+data) is required"})
+		case errors.Is(err, events.ErrEventNotSettlable):
+			c.JSON(http.StatusConflict, gin.H{"error": "event is not ready for settlement request"})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to request settlement"})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, e)
+}
+
+func (h *EventsHandler) ListSettlementRequests(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"items": h.service.ListSettlementRequests()})
 }
 
 func (h *EventsHandler) SettleEvent(c *gin.Context) {

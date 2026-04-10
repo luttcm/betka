@@ -14,8 +14,10 @@ interface StoredAuth {
 
 interface AuthContextValue {
   token: string | null;
+  userId: string | null;
   email: string | null;
   role: UserRole | null;
+  isAdmin: boolean;
   canModerate: boolean;
   isAuthenticated: boolean;
   signIn: (token: string, email?: string, role?: UserRole) => void;
@@ -45,8 +47,25 @@ function roleFromToken(token: string): UserRole | null {
   return null;
 }
 
+function userIdFromToken(token: string): string | null {
+  try {
+    const [, payload] = token.split(".");
+    if (!payload) {
+      return null;
+    }
+
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const withPadding = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
+    const decoded = JSON.parse(atob(withPadding)) as { sub?: unknown };
+    return typeof decoded.sub === "string" ? decoded.sub : null;
+  } catch {
+    return null;
+  }
+}
+
 export function AuthProvider({ children }: PropsWithChildren) {
   const [token, setToken] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const [email, setEmail] = useState<string | null>(null);
   const [role, setRole] = useState<UserRole | null>(null);
 
@@ -64,6 +83,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       const parsed = JSON.parse(raw) as StoredAuth;
       if (parsed?.token) {
         setToken(parsed.token);
+        setUserId(userIdFromToken(parsed.token));
         setEmail(parsed.email ?? null);
         setRole(parsed.role ?? roleFromToken(parsed.token));
       }
@@ -75,8 +95,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const value = useMemo<AuthContextValue>(
     () => ({
       token,
+      userId,
       email,
       role,
+      isAdmin: role === "admin",
       canModerate: role === "admin" || role === "moderator",
       isAuthenticated: Boolean(token),
       signIn: (nextToken: string, nextEmail?: string, nextRole?: UserRole) => {
@@ -84,6 +106,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         const resolvedRole = nextRole ?? roleFromToken(nextToken);
 
         setToken(nextToken);
+        setUserId(userIdFromToken(nextToken));
         setEmail(normalizedEmail);
         setRole(resolvedRole);
 
@@ -98,6 +121,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       },
       signOut: () => {
         setToken(null);
+        setUserId(null);
         setEmail(null);
         setRole(null);
 
@@ -106,7 +130,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         }
       },
     }),
-    [email, role, token],
+    [email, role, token, userId],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -118,7 +118,7 @@ func TestAuthRegisterLoginAndMe(t *testing.T) {
 		t.Fatalf("expected status %d on verify with empty token, got %d", http.StatusBadRequest, verifyW.Code)
 	}
 
-	verifyToken := extractVerifyTokenFromRegisterEmailLog(logBuf.String())
+	verifyToken := waitForVerifyTokenInLogs(logBuf)
 	if verifyToken == "" {
 		t.Fatal("expected verify token to be present in register email log")
 	}
@@ -197,7 +197,7 @@ func TestModerationEndpointRequiresRole(t *testing.T) {
 	}
 	loginRaw, _ := json.Marshal(loginBody)
 
-	verifyToken := extractVerifyTokenFromRegisterEmailLog(logBuf.String())
+	verifyToken := waitForVerifyTokenInLogs(logBuf)
 	if verifyToken == "" {
 		t.Fatal("expected verify token to be present in register email log")
 	}
@@ -508,6 +508,21 @@ func TestAdminSettlementFlow(t *testing.T) {
 		t.Fatalf("expected status %d on place bet, got %d, body=%s", http.StatusCreated, placeW.Code, placeW.Body.String())
 	}
 
+	requestSettlementBody := map[string]any{
+		"evidence_url": "https://example.com/proof",
+	}
+	requestSettlementRaw, _ := json.Marshal(requestSettlementBody)
+
+	requestSettlementReq := httptest.NewRequest(http.MethodPost, "/v1/events/"+eventID+"/request-settlement", bytes.NewBuffer(requestSettlementRaw))
+	requestSettlementReq.Header.Set("Content-Type", "application/json")
+	requestSettlementReq.Header.Set("Authorization", "Bearer "+creatorToken)
+	requestSettlementW := httptest.NewRecorder()
+	router.ServeHTTP(requestSettlementW, requestSettlementReq)
+
+	if requestSettlementW.Code != http.StatusOK {
+		t.Fatalf("expected status %d on settlement request, got %d, body=%s", http.StatusOK, requestSettlementW.Code, requestSettlementW.Body.String())
+	}
+
 	settleBody := map[string]string{"winner_outcome": "yes"}
 	settleRaw, _ := json.Marshal(settleBody)
 
@@ -538,7 +553,7 @@ func TestAdminSettlementFlow(t *testing.T) {
 		t.Fatalf("expected status %d on wallet get after settlement, got %d", http.StatusOK, walletW.Code)
 	}
 
-	if !bytes.Contains(walletW.Body.Bytes(), []byte("1100")) {
+	if !bytes.Contains(walletW.Body.Bytes(), []byte("1090")) {
 		t.Fatalf("expected wallet payout after settlement, body=%s", walletW.Body.String())
 	}
 
@@ -582,6 +597,18 @@ func extractVerifyTokenFromRegisterEmailLog(body string) string {
 	}
 
 	return body[start:end]
+}
+
+func waitForVerifyTokenInLogs(buf *bytes.Buffer) string {
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		if token := extractVerifyTokenFromRegisterEmailLog(buf.String()); token != "" {
+			return token
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	return extractVerifyTokenFromRegisterEmailLog(buf.String())
 }
 
 func captureLogs(t *testing.T) *bytes.Buffer {

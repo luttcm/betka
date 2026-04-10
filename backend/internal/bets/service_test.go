@@ -99,8 +99,8 @@ func TestSettleEventBets(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected yes wallet get error: %v", err)
 	}
-	if yesWallet.BalanceTokens != 1100 {
-		t.Fatalf("expected winner balance 1100, got %v", yesWallet.BalanceTokens)
+	if yesWallet.BalanceTokens != 1090 {
+		t.Fatalf("expected winner balance 1090 with dynamic odds, got %v", yesWallet.BalanceTokens)
 	}
 
 	noWallet, err := walletSvc.GetWallet("usr_no")

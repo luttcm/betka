@@ -104,11 +104,13 @@ func NewRouter(cfg config.Config) *gin.Engine {
 		{
 			eventsGroup.GET("", eventsHandler.ListEvents)
 			eventsGroup.GET("/:id", eventsHandler.GetEvent)
+			eventsGroup.GET("/:id/odds", eventsHandler.GetEventOdds)
 
 			eventsAuthGroup := eventsGroup.Group("")
 			eventsAuthGroup.Use(middleware.RequireAuth(cfg.AuthJWTSecret))
 			{
 				eventsAuthGroup.POST("", eventsHandler.CreateEvent)
+				eventsAuthGroup.POST("/:id/request-settlement", eventsHandler.RequestSettlement)
 			}
 		}
 
@@ -124,6 +126,7 @@ func NewRouter(cfg config.Config) *gin.Engine {
 		adminGroup := v1.Group("/admin")
 		adminGroup.Use(middleware.RequireRoles(cfg.AuthJWTSecret, "admin"))
 		{
+			adminGroup.GET("/events/settlement-requests", eventsHandler.ListSettlementRequests)
 			adminGroup.POST("/events/:id/settle", eventsHandler.SettleEvent)
 		}
 	}
