@@ -60,6 +60,24 @@ xdg-open http://localhost:3001
 `BOOTSTRAP_ADMIN_EMAIL` + `BOOTSTRAP_ADMIN_PASSWORD`.
 Пользователь будет создан (или обновлён), получит роль `admin`, а `email_verified=true`.
 
+## Хранение данных: PostgreSQL + fallback
+
+Backend больше не ограничен только in-memory режимом:
+
+- при доступной `DATABASE_URL` сервисы `auth/events/wallet/bets` пишут и читают данные из PostgreSQL;
+- при недоступной БД API логирует проблему подключения и автоматически использует in-memory fallback (для dev/тестовых сценариев).
+
+Проверка, что запись действительно идёт в БД:
+
+```bash
+docker compose up --build
+docker compose exec postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT COUNT(*) FROM users;"
+docker compose exec postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT COUNT(*) FROM events;"
+docker compose exec postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT COUNT(*) FROM bets;"
+```
+
+Если значения растут после вызовов API, персистентность работает корректно.
+
 ## Auth flow (MVP)
 
 - `POST /v1/auth/register` создаёт пользователя и отправляет письмо для подтверждения email.

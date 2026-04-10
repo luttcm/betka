@@ -61,13 +61,11 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	}
 
 	verifyLink := auth.BuildVerifyLink(h.verifyBaseURL, user.VerifyToken)
-	if err := h.emailSender.Send(notifications.Message{
+	h.sendEmailAsync(notifications.Message{
 		To:      user.Email,
 		Subject: "Bet MVP: подтвердите email",
 		Body:    "Спасибо за регистрацию! Подтвердите email: " + verifyLink,
-	}); err != nil {
-		log.Printf("failed to send verify email to %s: %v", user.Email, err)
-	}
+	})
 
 	c.JSON(http.StatusCreated, gin.H{
 		"id":             user.ID,
@@ -130,13 +128,11 @@ func (h *AuthHandler) VerifyEmail(c *gin.Context) {
 		return
 	}
 
-	if err := h.emailSender.Send(notifications.Message{
+	h.sendEmailAsync(notifications.Message{
 		To:      user.Email,
 		Subject: "Bet MVP: email подтвержден",
 		Body:    "Ваш email успешно подтвержден.",
-	}); err != nil {
-		log.Printf("failed to send email confirmation notice to %s: %v", user.Email, err)
-	}
+	})
 
 	c.JSON(http.StatusOK, gin.H{
 		"id":             user.ID,
@@ -155,4 +151,12 @@ func (h *AuthHandler) tokenTTLDuration() time.Duration {
 	}
 
 	return h.authTokenTTL
+}
+
+func (h *AuthHandler) sendEmailAsync(message notifications.Message) {
+	go func() {
+		if err := h.emailSender.Send(message); err != nil {
+			log.Printf("failed to send email to %s: %v", message.To, err)
+		}
+	}()
 }

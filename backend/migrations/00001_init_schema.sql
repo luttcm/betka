@@ -6,6 +6,8 @@ CREATE TABLE users (
     password_hash TEXT NOT NULL,
     role TEXT NOT NULL CHECK (role IN ('user', 'moderator', 'admin')),
     status TEXT NOT NULL CHECK (status IN ('active', 'blocked')),
+    email_verified BOOLEAN NOT NULL DEFAULT FALSE,
+    verify_token TEXT NOT NULL DEFAULT '',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -24,6 +26,7 @@ CREATE TABLE events (
     category TEXT,
     resolve_at TIMESTAMPTZ NOT NULL,
     status TEXT NOT NULL CHECK (status IN ('draft', 'pending', 'approved', 'rejected', 'settled', 'canceled')),
+    winner_outcome TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -75,9 +78,11 @@ CREATE TABLE wallet_transactions (
     type TEXT NOT NULL CHECK (type IN ('subscribe', 'withdraw', 'hold', 'release', 'settle')),
     amount_tokens NUMERIC(20, 8) NOT NULL CHECK (amount_tokens > 0),
     ref_type TEXT,
-    ref_id BIGINT,
+    ref_id BIGINT REFERENCES bets(id),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE INDEX idx_users_verify_token ON users(verify_token);
 
 CREATE TABLE audit_logs (
     id BIGSERIAL PRIMARY KEY,
