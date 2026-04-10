@@ -1,14 +1,21 @@
 import {
+  ApiErrorPayload,
+  BetItem,
   CreateEventPayload,
   EventItem,
   EventListResponse,
   LoginPayload,
   LoginResponse,
+  MyBetsResponse,
   ModerationEventsResponse,
   ModerationQueueItem,
+  PlaceBetPayload,
   RegisterPayload,
   RegisterResponse,
   VerifyEmailResponse,
+  Wallet,
+  WalletTransaction,
+  WalletTransactionsResponse,
 } from "@/lib/types";
 
 const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ?? "/api").replace(
@@ -18,24 +25,36 @@ const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ?
 
 export class ApiError extends Error {
   status: number;
+  code?: string;
+  details?: unknown;
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, payload?: ApiErrorPayload | null) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.code = payload?.code;
+    this.details = payload?.details;
   }
+}
+
+function isApiErrorPayload(data: unknown): data is ApiErrorPayload {
+  return Boolean(data && typeof data === "object" && "error" in data && typeof data.error === "string");
+}
+
+function withAuth(token: string): Record<string, string> {
+  return {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${token}`,
+  };
 }
 
 async function parseResponse<T>(response: Response): Promise<T> {
   const data = await response.json().catch(() => null);
 
   if (!response.ok) {
-    const message =
-      data && typeof data === "object" && "error" in data && typeof data.error === "string"
-        ? data.error
-        : `request failed with status ${response.status}`;
+    const message = isApiErrorPayload(data) ? data.error : `request failed with status ${response.status}`;
 
-    throw new ApiError(message, response.status);
+    throw new ApiError(message, response.status, isApiErrorPayload(data) ? data : null);
   }
 
   return data as T;
@@ -69,10 +88,7 @@ export async function getEventById(eventId: string): Promise<EventItem> {
 export async function createEvent(payload: CreateEventPayload, token: string): Promise<EventItem> {
   const response = await fetch(`${API_BASE_URL}/v1/events`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
+    headers: withAuth(token),
     body: JSON.stringify(payload),
   });
 
@@ -118,10 +134,7 @@ export async function verifyEmail(token: string): Promise<VerifyEmailResponse> {
 export async function getModerationEvents(token: string): Promise<ModerationQueueItem[]> {
   const response = await fetch(`${API_BASE_URL}/v1/moderation/events`, {
     method: "GET",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
+    headers: withAuth(token),
     cache: "no-store",
   });
 
@@ -132,10 +145,7 @@ export async function getModerationEvents(token: string): Promise<ModerationQueu
 export async function approveModerationEvent(eventId: string, token: string): Promise<EventItem> {
   const response = await fetch(`${API_BASE_URL}/v1/moderation/events/${eventId}/approve`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
+    headers: withAuth(token),
   });
 
   return parseResponse<EventItem>(response);
@@ -144,12 +154,54 @@ export async function approveModerationEvent(eventId: string, token: string): Pr
 export async function rejectModerationEvent(eventId: string, reason: string, token: string): Promise<EventItem> {
   const response = await fetch(`${API_BASE_URL}/v1/moderation/events/${eventId}/reject`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
+    headers: withAuth(token),
     body: JSON.stringify({ reason }),
   });
 
   return parseResponse<EventItem>(response);
+}
+
+export async function getWallet(token: string): Promise<Wallet> {
+  const response = await fetch(`${API_BASE_URL}/v1/wallet`, {
+    method: "GET",
+    headers: withAuth(token),
+    cache: "no-store",
+  });
+
+  return parseResponse<Wallet>(response);
+}
+
+export async function getWalletTransactions(token: string): Promise<WalletTransaction[]> {
+  const response = await fetch(`${API_BASE_URL}/v1/wallet/transactions`, {
+    method: "GET",
+    headers: withAuth(token),
+    cache: "no-store",
+  });
+
+  const payload = await parseResponse<WalletTransactionsResponse>(response);
+  return payload.items;
+}
+
+export async function getMyBets(token: string): Promise<BetItem[]> {
+  const response = await fetch(`${API_BASE_URL}/v1/bets/my`, {
+    method: "GET",
+    headers: withAuth(token),
+    cache: "no-store",
+  });
+
+  const payload = await parseResponse<MyBetsResponse>(response);
+  return payload.items;
+}
+
+export async function placeBet(payload: PlaceBetPayload, token: string, idempotencyKey: string): Promise<BetItem> {
+  const response = await fetch(`${API_BASE_URL}/v1/bets`, {
+    method: "POST",
+    headers: {
+      ...withAuth(token),
+      "Idempotency-Key": idempotencyKey,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  return parseResponse<BetItem>(response);
 }

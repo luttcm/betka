@@ -43,6 +43,54 @@ export interface CreateEventPayload {
 
 export interface ApiErrorPayload {
   error: string;
+  code?: string;
+  details?: unknown;
+}
+
+export interface Wallet {
+  user_id: string;
+  balance_tokens: number;
+  updated_at: string;
+}
+
+export interface WalletTransaction {
+  id: string;
+  user_id: string;
+  type: string;
+  amount_tokens: number;
+  ref_type?: string;
+  ref_id?: string;
+  created_at: string;
+}
+
+export interface WalletTransactionsResponse {
+  items: WalletTransaction[];
+}
+
+export type BetStatus = "open" | "won" | "lost" | "refunded";
+
+export interface BetItem {
+  id: string;
+  user_id: string;
+  event_id: string;
+  outcome_code: "yes" | "no";
+  stake: number;
+  odds_at_bet: number;
+  potential_payout: number;
+  status: BetStatus;
+  idempotency_key: string;
+  placed_at: string;
+  settled_at?: string;
+}
+
+export interface MyBetsResponse {
+  items: BetItem[];
+}
+
+export interface PlaceBetPayload {
+  event_id: string;
+  outcome_code: "yes" | "no";
+  stake: number;
 }
 
 export interface RegisterPayload {

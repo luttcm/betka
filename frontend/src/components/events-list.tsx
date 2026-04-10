@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 
 import { ApiError, getEvents } from "@/lib/api";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui-states";
 
 function formatDate(value: string): string {
   const date = new Date(value);
@@ -24,24 +25,16 @@ export function EventsList() {
   });
 
   if (isLoading) {
-    return <p className="panel">Загрузка событий...</p>;
+    return <LoadingState message="Загрузка событий..." />;
   }
 
   if (isError) {
     const message = error instanceof ApiError ? error.message : "Не удалось загрузить события";
-    return (
-      <p className="rounded-2xl border border-red-200 bg-red-50 p-4 text-red-700">
-        Ошибка загрузки: {message}
-      </p>
-    );
+    return <ErrorState message={message} />;
   }
 
   if (!data || data.length === 0) {
-    return (
-      <div className="panel">
-        <p className="text-slate-700">Пока нет опубликованных событий.</p>
-      </div>
-    );
+    return <EmptyState message="Пока нет опубликованных событий." />;
   }
 
   return (
