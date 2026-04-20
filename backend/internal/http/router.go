@@ -51,6 +51,15 @@ func NewRouter(cfg config.Config) *gin.Engine {
 		panic("postgres is required but DATABASE_URL is empty")
 	}
 
+	if db != nil {
+		if err := events.EnsureSchema(db); err != nil {
+			if cfg.RequirePostgres {
+				panic(fmt.Sprintf("failed to ensure events schema: %v", err))
+			}
+			log.Printf("failed to ensure events schema: %v", err)
+		}
+	}
+
 	authService := auth.NewServiceWithDB(db)
 	if cfg.BootstrapAdminEmail != "" && cfg.BootstrapAdminPassword != "" {
 		adminUser, err := authService.BootstrapAdmin(cfg.BootstrapAdminEmail, cfg.BootstrapAdminPassword)
